@@ -1,0 +1,11 @@
+.vscode
+
+.DS_Store
+
+vendor/
+
+temp/
+matrix-wechat-agent.exe
+SWeChatRobot.dll
+wxDriver.dll
+wxDriver64.dll
