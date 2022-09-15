@@ -31,6 +31,7 @@ const (
 	WECHAT_CHATROOM_GET_MEMBER_LIST = 25
 	WECHAT_DATABASE_GET_HANDLES     = 32
 	WECHAT_DATABASE_QUERY           = 34
+	WECHAT_QRCODE_LOGIN             = 41
 )
 
 type WechatClient struct {
@@ -109,6 +110,22 @@ func (c *WechatClient) HookMsg() error {
 	}
 
 	return nil
+}
+
+func (c *WechatClient) LoginWtihQRCode(imgPath string) ([]byte, error) {
+	data, err := json.Marshal(map[string]string{
+		"img_path": imgPath,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_QRCODE_LOGIN),
+		data,
+	)
+
+	return fetchQRCode(imgPath), err
 }
 
 func (c *WechatClient) IsLogin() bool {

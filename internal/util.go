@@ -374,6 +374,26 @@ func saveBlob(as *AppService, msg *MatrixMessage) string {
 	return path
 }
 
+func fetchQRCode(path string) []byte {
+	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
+	defer cancel()
+
+	for {
+		if PathExists(path) {
+			data, err := os.ReadFile(path)
+			if err == nil && data != nil {
+				return data
+			}
+		}
+
+		select {
+		case <-time.After(1 * time.Second):
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || errors.Is(err, os.ErrExist)

@@ -135,6 +135,18 @@ func (m *WechatManager) Disconnet(mxid string) (err error) {
 	return
 }
 
+func (m *WechatManager) LoginWtihQRCode(mxid, imgPath string) ([]byte, error) {
+	m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
+
+	client, ok := m.clients[mxid]
+	if !ok {
+		return nil, fmt.Errorf("client not found")
+	}
+
+	return client.LoginWtihQRCode(imgPath)
+}
+
 func (m *WechatManager) IsLogin(mxid string) (*IsLoginData, error) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()

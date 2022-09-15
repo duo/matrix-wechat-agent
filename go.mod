@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/antchfx/xmlquery v1.3.12
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/shirou/gopsutil/v3 v3.22.8
 	github.com/sirupsen/logrus v1.9.0

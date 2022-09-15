@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	log "github.com/sirupsen/logrus"
@@ -174,6 +176,9 @@ func actuallyHandleCommand(as *AppService, msg *WebsocketMessage) (resp interfac
 		err = GetWechatManager().Connect(msg.MXID)
 	case CommandDisconnect:
 		err = GetWechatManager().Disconnet(msg.MXID)
+	case CommandLoginWithQRCode:
+		imgPath := filepath.Join(as.Tempdir, uuid.New().String())
+		resp, err = GetWechatManager().LoginWtihQRCode(msg.MXID, imgPath)
 	case CommandIsLogin:
 		resp, err = GetWechatManager().IsLogin(msg.MXID)
 	case CommandGetSelf:
