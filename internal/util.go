@@ -317,9 +317,10 @@ func parseApp(as *AppService, msg *WechatMessage) *LinkData {
 	if titleNode == nil || len(titleNode.InnerText()) == 0 {
 		return nil
 	}
+	var url string
 	urlNode := xmlquery.FindOne(doc, "/msg/appmsg/url")
-	if urlNode == nil || len(urlNode.InnerText()) == 0 {
-		return nil
+	if urlNode != nil {
+		url = urlNode.InnerText()
 	}
 	var des string
 	desNode := xmlquery.FindOne(doc, "/msg/appmsg/des")
@@ -330,7 +331,7 @@ func parseApp(as *AppService, msg *WechatMessage) *LinkData {
 	return &LinkData{
 		Title:       titleNode.InnerText(),
 		Description: des,
-		URL:         urlNode.InnerText(),
+		URL:         url,
 	}
 }
 

@@ -18,20 +18,21 @@ import (
 const (
 	CLIENT_API_URL = "http://127.0.0.1:%d/api/?type=%d"
 
-	WECHAT_IS_LOGIN                 = 0
-	WECHAT_GET_SELF_INFO            = 1
-	WECHAT_MSG_SEND_TEXT            = 2
-	WECHAT_MSG_SEND_AT              = 3
-	WECHAT_MSG_SEND_IMAGE           = 5
-	WECHAT_MSG_SEND_FILE            = 6
-	WECHAT_MSG_START_HOOK           = 9
-	WECHAT_MSG_START_IMAGE_HOOK     = 11
-	WECHAT_MSG_START_VOICE_HOOK     = 13
-	WECHAT_CONTACT_GET_LIST         = 15
-	WECHAT_CHATROOM_GET_MEMBER_LIST = 25
-	WECHAT_DATABASE_GET_HANDLES     = 32
-	WECHAT_DATABASE_QUERY           = 34
-	WECHAT_QRCODE_LOGIN             = 41
+	WECHAT_IS_LOGIN                     = 0
+	WECHAT_GET_SELF_INFO                = 1
+	WECHAT_MSG_SEND_TEXT                = 2
+	WECHAT_MSG_SEND_AT                  = 3
+	WECHAT_MSG_SEND_IMAGE               = 5
+	WECHAT_MSG_SEND_FILE                = 6
+	WECHAT_MSG_START_HOOK               = 9
+	WECHAT_MSG_START_IMAGE_HOOK         = 11
+	WECHAT_MSG_START_VOICE_HOOK         = 13
+	WECHAT_CONTACT_GET_LIST             = 15
+	WECHAT_CHATROOM_GET_MEMBER_LIST     = 25
+	WECHAT_CHATROOM_GET_MEMBER_NICKNAME = 26
+	WECHAT_DATABASE_GET_HANDLES         = 32
+	WECHAT_DATABASE_QUERY               = 34
+	WECHAT_QRCODE_LOGIN                 = 41
 )
 
 type WechatClient struct {
@@ -299,6 +300,22 @@ func (c *WechatClient) GetGroupMembers(wxid string) ([]string, error) {
 	}
 
 	return strings.Split(resp.Members, "^G"), nil
+}
+
+func (c *WechatClient) GetGroupMemberNickname(group, wxid string) (string, error) {
+	if !c.IsLogin() {
+		return "", fmt.Errorf("user not logged")
+	}
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_CHATROOM_GET_MEMBER_NICKNAME),
+		[]byte(fmt.Sprintf(`{"chatroom_id":"%s", "wxid":"%s"}`, group, wxid)),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return gjson.GetBytes(ret, "nickname").String(), nil
 }
 
 func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {

@@ -100,8 +100,11 @@ func (m *WechatManager) Connect(mxid string) error {
 		port: atomic.AddInt32(&m.portSeq, 1),
 	}
 	pid, _, errno := syscall.SyscallN(m.funcNewWechat)
-	if int(errno) != 0 {
+	if pid == 0 {
 		return errno
+	}
+	if int(errno) != 0 {
+		log.Infoln(errno)
 	}
 	client.pid = pid
 
@@ -205,6 +208,18 @@ func (m *WechatManager) GetGroupMembers(mxid, wxid string) ([]string, error) {
 	}
 
 	return client.GetGroupMembers(wxid)
+}
+
+func (m *WechatManager) GetGroupMemberNickname(mxid, group, wxid string) (string, error) {
+	m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
+
+	client, ok := m.clients[mxid]
+	if !ok {
+		return "", fmt.Errorf("client not found")
+	}
+
+	return client.GetGroupMemberNickname(group, wxid)
 }
 
 func (m *WechatManager) GetFriendList(mxid string) ([]*UserInfo, error) {

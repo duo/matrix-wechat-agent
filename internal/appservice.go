@@ -201,6 +201,12 @@ func actuallyHandleCommand(as *AppService, msg *WebsocketMessage) (resp interfac
 		if err == nil {
 			resp, err = GetWechatManager().GetGroupMembers(msg.MXID, data.ID)
 		}
+	case CommandGetGroupMemberNickname:
+		var data QueryData
+		err = json.Unmarshal(msg.Data, &data)
+		if err == nil {
+			resp, err = GetWechatManager().GetGroupMemberNickname(msg.MXID, data.Group, data.ID)
+		}
 	case CommandGetFriendList:
 		resp, err = GetWechatManager().GetFriendList(msg.MXID)
 	case CommandGetGroupList:
