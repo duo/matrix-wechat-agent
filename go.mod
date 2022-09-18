@@ -4,13 +4,12 @@ go 1.19
 
 require (
 	github.com/antchfx/xmlquery v1.3.12
-	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/shirou/gopsutil/v3 v3.22.8
 	github.com/sirupsen/logrus v1.9.0
 	github.com/tidwall/gjson v1.14.3
+	github.com/tidwall/tinylru v1.1.0
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
-	google.golang.org/protobuf v1.28.1
 )
 
 require (

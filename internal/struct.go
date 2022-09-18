@@ -8,7 +8,7 @@ import (
 const (
 	CommandConnect                = "connect"
 	CommandDisconnect             = "disconnect"
-	CommandLoginWithQRCode        = "log_qr"
+	CommandLoginWithQRCode        = "login_qr"
 	CommandIsLogin                = "is_login"
 	CommandGetSelf                = "get_self"
 	CommandGetUserInfo            = "get_user_info"
@@ -40,6 +40,11 @@ type PingData struct {
 
 type IsLoginResp struct {
 	IsLogin int    `json:"is_login"`
+	Result  string `json:"result"`
+}
+
+type GetQRCodeResp struct {
+	Message string `json:"msg"`
 	Result  string `json:"result"`
 }
 
@@ -161,16 +166,16 @@ type WebsocketMessage struct {
 }
 
 type WechatMessage struct {
-	PID       int    `json:"pid"`
-	MsgID     uint64 `json:"msgid"`
-	LocalID   int    `json:"localId"`
-	Time      string `json:"time"`
-	WxID      string `json:"wxid"`
-	Sender    string `json:"sender"`
-	Self      string `json:"self"`
-	IsSendMsg int8   `json:"isSendMsg"`
-	MsgType   int    `json:"type"`
-	Message   string `json:"message"`
-	FilePath  string `json:"filepath"`
-	ExtraInfo string `json:"extrainfo"`
+	PID           int    `json:"pid"`
+	MsgID         uint64 `json:"msgid"`
+	Time          string `json:"time"`
+	WxID          string `json:"wxid"`
+	Sender        string `json:"sender"`
+	Self          string `json:"self"`
+	IsSendMsg     int8   `json:"isSendMsg"`
+	IsSendByPhone int8   `json:"isSendByPhone"`
+	MsgType       int    `json:"type"`
+	Message       string `json:"message"`
+	FilePath      string `json:"filepath"`
+	ExtraInfo     string `json:"extrainfo"`
 }

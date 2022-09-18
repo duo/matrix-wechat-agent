@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,12 +18,6 @@ import (
 
 	"github.com/antchfx/xmlquery"
 	"golang.org/x/sys/windows/registry"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/dynamicpb"
-
-	pref "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const MediaDownloadTiemout = 30 * time.Second
@@ -47,38 +40,7 @@ func getMentions(as *AppService, msg *WechatMessage) []string {
 		return nil
 	}
 
-	data, err := base64.StdEncoding.DecodeString(msg.ExtraInfo)
-	if err != nil {
-		return nil
-	}
-
-	fd := makeFileDescriptor()
-
-	extraDesc := fd.Messages().ByName("Extra")
-	kvDesc := fd.Messages().ByName("KV")
-
-	pbMsg := dynamicpb.NewMessage(extraDesc)
-	if err := proto.Unmarshal(data, pbMsg); err != nil {
-		return nil
-	}
-
-	var mentionsXML string
-	lst := pbMsg.Get(extraDesc.Fields().ByName("kv_list")).List()
-	length := lst.Len()
-	for i := 0; i < length; i++ {
-		ele := lst.Get(i)
-		key := ele.Message().Get(kvDesc.Fields().ByName("key")).Int()
-		value := ele.Message().Get(kvDesc.Fields().ByName("value")).String()
-		if key == 7 {
-			mentionsXML = value
-		}
-	}
-
-	if len(mentionsXML) == 0 {
-		return nil
-	}
-
-	doc, err := xmlquery.Parse(strings.NewReader(mentionsXML))
+	doc, err := xmlquery.Parse(strings.NewReader(msg.ExtraInfo))
 	if err != nil {
 		return nil
 	}
@@ -375,26 +337,6 @@ func saveBlob(as *AppService, msg *MatrixMessage) string {
 	return path
 }
 
-func fetchQRCode(path string) []byte {
-	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
-	defer cancel()
-
-	for {
-		if PathExists(path) {
-			data, err := os.ReadFile(path)
-			if err == nil && data != nil {
-				return data
-			}
-		}
-
-		select {
-		case <-time.After(1 * time.Second):
-		case <-ctx.Done():
-			return nil
-		}
-	}
-}
-
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || errors.Is(err, os.ErrExist)
@@ -469,51 +411,4 @@ func HTTPGetReadCloser(url string) (io.ReadCloser, error) {
 	}
 
 	return resp.Body, err
-}
-
-func makeFileDescriptor() pref.FileDescriptor {
-	pb := &descriptorpb.FileDescriptorProto{
-		Syntax:  proto.String("proto3"),
-		Name:    proto.String("mm.proto"),
-		Package: proto.String("mm"),
-		MessageType: []*descriptorpb.DescriptorProto{
-			{
-				Name: proto.String("KV"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:     proto.String("key"),
-						JsonName: proto.String("key"),
-						Number:   proto.Int32(1),
-						Type:     descriptorpb.FieldDescriptorProto_Type(pref.Int32Kind).Enum(),
-					},
-					{
-						Name:     proto.String("value"),
-						JsonName: proto.String("value"),
-						Number:   proto.Int32(2),
-						Type:     descriptorpb.FieldDescriptorProto_Type(pref.StringKind).Enum(),
-					},
-				},
-			},
-			{
-				Name: proto.String("Extra"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:     proto.String("kv_list"),
-						JsonName: proto.String("kv_list"),
-						Number:   proto.Int32(3),
-						Label:    descriptorpb.FieldDescriptorProto_Label(pref.Repeated).Enum(),
-						Type:     descriptorpb.FieldDescriptorProto_Type(pref.MessageKind).Enum(),
-						TypeName: proto.String(".mm.KV"),
-					},
-				},
-			},
-		},
-	}
-
-	fd, err := protodesc.NewFile(pb, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	return fd
 }

@@ -138,7 +138,7 @@ func (m *WechatManager) Disconnet(mxid string) (err error) {
 	return
 }
 
-func (m *WechatManager) LoginWtihQRCode(mxid, imgPath string) ([]byte, error) {
+func (m *WechatManager) LoginWtihQRCode(mxid string) ([]byte, error) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 
@@ -147,7 +147,7 @@ func (m *WechatManager) LoginWtihQRCode(mxid, imgPath string) ([]byte, error) {
 		return nil, fmt.Errorf("client not found")
 	}
 
-	return client.LoginWtihQRCode(imgPath)
+	return client.LoginWtihQRCode()
 }
 
 func (m *WechatManager) IsLogin(mxid string) (*IsLoginData, error) {
@@ -307,7 +307,9 @@ func (m *WechatManager) Serve(as *AppService) {
 					}
 					return
 				}
-				var msg WechatMessage
+				msg := WechatMessage{
+					IsSendByPhone: 1,
+				}
 				if err := json.Unmarshal(data, &msg); err != nil {
 					log.Warnln(err)
 					conn.Write([]byte("500 ERROR"))

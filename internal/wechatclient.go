@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/tidwall/gjson"
@@ -32,7 +33,7 @@ const (
 	WECHAT_CHATROOM_GET_MEMBER_NICKNAME = 26
 	WECHAT_DATABASE_GET_HANDLES         = 32
 	WECHAT_DATABASE_QUERY               = 34
-	WECHAT_QRCODE_LOGIN                 = 41
+	WECHAT_GET_QROCDE_IMAGE             = 41
 )
 
 type WechatClient struct {
@@ -113,20 +114,25 @@ func (c *WechatClient) HookMsg() error {
 	return nil
 }
 
-func (c *WechatClient) LoginWtihQRCode(imgPath string) ([]byte, error) {
-	data, err := json.Marshal(map[string]string{
-		"img_path": imgPath,
-	})
+func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
+	// FIXME: skpi the first qr code
+	time.Sleep(3 * time.Second)
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_GET_QROCDE_IMAGE),
+		[]byte("{}"),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_QRCODE_LOGIN),
-		data,
-	)
-
-	return fetchQRCode(imgPath), err
+	var resp GetQRCodeResp
+	err = json.Unmarshal(ret, &resp)
+	if err != nil {
+		return ret, nil
+	} else {
+		return nil, fmt.Errorf("%v", resp.Message)
+	}
 }
 
 func (c *WechatClient) IsLogin() bool {
@@ -139,7 +145,7 @@ func (c *WechatClient) IsLogin() bool {
 	}
 
 	var resp IsLoginResp
-	json.Unmarshal(ret, &resp)
+	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse is_login response", err)
 		return false
@@ -162,7 +168,7 @@ func (c *WechatClient) GetSelf() (*UserInfo, error) {
 	}
 
 	var resp GetSelfResp
-	json.Unmarshal(ret, &resp)
+	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_self response", err)
 		return nil, err
@@ -293,7 +299,7 @@ func (c *WechatClient) GetGroupMembers(wxid string) ([]string, error) {
 	}
 
 	var resp GetGroupMembersResp
-	json.Unmarshal(ret, &resp)
+	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_group_members response", err)
 		return nil, err
@@ -332,7 +338,7 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 	}
 
 	var resp GetFriendListResp
-	json.Unmarshal(ret, &resp)
+	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_friend_list response", err)
 		return nil, err
@@ -362,7 +368,7 @@ func (c *WechatClient) GetGroupList() ([]*GroupInfo, error) {
 	}
 
 	var resp GetGroupListResp
-	json.Unmarshal(ret, &resp)
+	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_group_list response", err)
 		return nil, err

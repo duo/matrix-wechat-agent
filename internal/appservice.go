@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/tidwall/tinylru"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -43,6 +42,8 @@ type AppService struct {
 	Workdir string
 	Docdir  string
 	Tempdir string
+
+	cache tinylru.LRU
 
 	ws            *websocket.Conn
 	wsWriteLock   sync.Mutex
@@ -177,8 +178,7 @@ func actuallyHandleCommand(as *AppService, msg *WebsocketMessage) (resp interfac
 	case CommandDisconnect:
 		err = GetWechatManager().Disconnet(msg.MXID)
 	case CommandLoginWithQRCode:
-		imgPath := filepath.Join(as.Tempdir, uuid.New().String())
-		resp, err = GetWechatManager().LoginWtihQRCode(msg.MXID, imgPath)
+		resp, err = GetWechatManager().LoginWtihQRCode(msg.MXID)
 	case CommandIsLogin:
 		resp, err = GetWechatManager().IsLogin(msg.MXID)
 	case CommandGetSelf:
@@ -230,6 +230,11 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 		}
 	}()
 	ws := as.ws
+
+	// Skip message sent by hook
+	if msg.IsSendByPhone == 0 {
+		return
+	}
 
 	log.Debugf("Handle wechat message: %+v", msg)
 
@@ -311,6 +316,13 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 		switch appType {
 		case 6: // File
 			if len(msg.FilePath) == 0 {
+				return
+			}
+			// FIXME: skip duplicate file
+			if !strings.HasPrefix(msg.Message, "<?xml") {
+				return
+			}
+			if _, ok := as.cache.Set(msg.MsgID, true); ok {
 				return
 			}
 			blob := downloadFile(as, msg)
