@@ -233,10 +233,13 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 
 	// Skip message sent by hook
 	if msg.IsSendByPhone == 0 {
+		as.cache.Set(msg.MsgID, true)
+		return
+	} else if _, ok := as.cache.Get(msg.MsgID); ok {
 		return
 	}
 
-	log.Debugf("Handle wechat message: %+v", msg)
+	log.Debugln("Handle wechat message: %+v", msg)
 
 	tm, err := time.ParseInLocation("2006-01-02 15:04:05", msg.Time, time.Local)
 	if err != nil {
@@ -331,6 +334,21 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 				event.Extra = blob
 			} else {
 				event.Content = "[文件下载失败]"
+			}
+		case 8:
+			if len(msg.FilePath) == 0 {
+				return
+			}
+			// FIXME: skip duplicate sticker
+			if strings.HasPrefix(msg.Message, "<?xml") {
+				return
+			}
+			blob := downloadSticker(as, msg)
+			if blob != nil {
+				event.EventType = EventImage
+				event.Extra = blob
+			} else {
+				event.Content = "[表情下载失败]"
 			}
 		case 57: // TODO: reply meesage not found fallback
 			content, reply := parseReply(as, msg)

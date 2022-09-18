@@ -158,21 +158,21 @@ func downloadSticker(as *AppService, msg *WechatMessage) *BlobData {
 		return nil
 	}
 
-	urlNode := xmlquery.FindOne(doc, "/msg/emoji/@cdnurl")
+	urlNode := xmlquery.FindOne(doc, "//@cdnurl")
 	if urlNode == nil || len(urlNode.InnerText()) == 0 {
 		return nil
 	}
 	url := urlNode.InnerText()
-	md5Node := xmlquery.FindOne(doc, "/msg/emoji/@md5")
-	if md5Node == nil || len(md5Node.InnerText()) == 0 {
+	hashNode := xmlquery.FindOne(doc, "//@aeskey")
+	if hashNode == nil || len(hashNode.InnerText()) == 0 {
 		return nil
 	}
-	md5 := md5Node.InnerText()
+	hash := hashNode.InnerText()
 
 	data, err := GetBytes(url)
 	if err == nil {
 		return &BlobData{
-			Name:   md5,
+			Name:   hash,
 			Binary: data,
 		}
 	} else {
