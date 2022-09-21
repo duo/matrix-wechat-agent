@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -77,13 +76,9 @@ func (c *WechatClient) Dispose() error {
 	return nil
 }
 
-func (c *WechatClient) HookMsg() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
+func (c *WechatClient) HookMsg(savePath string) error {
 	path, err := json.Marshal(map[string]string{
-		"save_path": dir,
+		"save_path": savePath,
 	})
 	if err != nil {
 		return err
@@ -115,7 +110,7 @@ func (c *WechatClient) HookMsg() error {
 }
 
 func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
-	// FIXME: skpi the first qr code
+	// FIXME: skip the first qr code
 	time.Sleep(3 * time.Second)
 
 	ret, err := post(

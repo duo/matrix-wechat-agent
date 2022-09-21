@@ -41,7 +41,6 @@ const (
 type AppService struct {
 	Workdir string
 	Docdir  string
-	Tempdir string
 
 	cache tinylru.LRU
 
@@ -174,7 +173,7 @@ func actuallyHandleCommand(as *AppService, msg *WebsocketMessage) (resp interfac
 
 	switch msg.Command {
 	case CommandConnect:
-		err = GetWechatManager().Connect(msg.MXID)
+		err = GetWechatManager().Connect(msg.MXID, as.Workdir)
 	case CommandDisconnect:
 		err = GetWechatManager().Disconnet(msg.MXID)
 	case CommandLoginWithQRCode:

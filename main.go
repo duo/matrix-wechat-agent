@@ -56,20 +56,17 @@ func main() {
 	defer syscall.FreeLibrary(driver)
 
 	var as internal.AppService
-	workdir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	tempdir := filepath.Join(workdir, "temp")
-	if !internal.PathExists(tempdir) {
-		if err := os.MkdirAll(tempdir, 0o644); err != nil {
+
+	docdir := internal.GetWechatDocdir()
+	workdir := filepath.Join(docdir, "matrix")
+	if !internal.PathExists(workdir) {
+		if err := os.MkdirAll(workdir, 0o644); err != nil {
 			log.Fatalf("Failed to create temp folder: %v", err)
 		}
 	}
 
 	as.Workdir = workdir
-	as.Docdir = internal.GetWechatDocdir()
-	as.Tempdir = tempdir
+	as.Docdir = docdir
 
 	go internal.GetWechatManager().Serve(&as)
 

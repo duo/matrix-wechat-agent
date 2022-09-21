@@ -328,7 +328,7 @@ func saveBlob(as *AppService, msg *MatrixMessage) string {
 	}
 
 	fileName := fmt.Sprintf("%x%s", md5.Sum(data.Binary), filepath.Ext(data.Name))
-	path := filepath.Join(as.Tempdir, fileName)
+	path := filepath.Join(as.Workdir, fileName)
 
 	if err := os.WriteFile(path, data.Binary, 0o644); err != nil {
 		return ""
@@ -345,6 +345,11 @@ func PathExists(path string) bool {
 func GetWechatDocdir() string {
 	u, _ := user.Current()
 	baseDir := filepath.Join(u.HomeDir, "Documents")
+
+	// Old windows path
+	if !PathExists(baseDir) {
+		baseDir = filepath.Join(u.HomeDir, "My Documents")
+	}
 
 	regKey, err := registry.OpenKey(registry.CURRENT_USER, "SOFTWARE\\Tencent\\WeChat", registry.QUERY_VALUE)
 	if err == nil {

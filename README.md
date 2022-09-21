@@ -4,7 +4,7 @@ An agent for [matrix-wechat](https://github.com/duo/matrix-wechat) based on [Com
 
 ### Building
 ```sh
-GOOS=windows GOARCH=amd64 go build -o matrix-wechat-agent.exe main.go
+GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go
 ```
 
 ### Dependencies

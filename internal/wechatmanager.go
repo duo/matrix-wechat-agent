@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
 
@@ -21,8 +23,9 @@ var (
 )
 
 const (
-	listenPort = 22222
-	is64Bit    = uint64(^uintptr(0)) == ^uint64(0)
+	listenPort        = 22222
+	is64Bit           = uint64(^uintptr(0)) == ^uint64(0)
+	ClientInitTiemout = 10 * time.Second
 )
 
 type WechatManager struct {
@@ -87,7 +90,7 @@ func (m *WechatManager) Dispose() {
 	}
 }
 
-func (m *WechatManager) Connect(mxid string) error {
+func (m *WechatManager) Connect(mxid string, path string) error {
 	m.clientsLock.Lock()
 	defer m.clientsLock.Unlock()
 
@@ -123,7 +126,21 @@ func (m *WechatManager) Connect(mxid string) error {
 	m.pids[int(pid)] = mxid
 	m.clients[mxid] = client
 
-	return client.HookMsg()
+	ctx, cancel := context.WithTimeout(context.Background(), ClientInitTiemout)
+	defer cancel()
+
+	for {
+		err = client.HookMsg(path)
+		if err == nil {
+			return nil
+		}
+
+		select {
+		case <-time.After(1 * time.Second):
+		case <-ctx.Done():
+			return err
+		}
+	}
 }
 
 func (m *WechatManager) Disconnet(mxid string) (err error) {
