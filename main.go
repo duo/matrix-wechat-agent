@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -18,8 +19,6 @@ const (
 	defaultReconnectBackoff = 2 * time.Second
 	maxReconnectBackoff     = 2 * time.Minute
 	reconnectBackoffReset   = 5 * time.Minute
-
-	is64Bit = uint64(^uintptr(0)) == ^uint64(0)
 )
 
 var (
@@ -44,7 +43,7 @@ func main() {
 	}
 
 	var driverDLL string
-	if is64Bit {
+	if runtime.GOARCH == "amd64" {
 		driverDLL = "wxDriver64.dll"
 	} else {
 		driverDLL = "wxDriver.dll"

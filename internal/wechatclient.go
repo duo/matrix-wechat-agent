@@ -194,8 +194,8 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		WHERE c.UserName="%s"
 	`, wxid)
 
-	jsonSql, err := json.Marshal(map[string]string{
-		"db_handle": fmt.Sprint(handle),
+	jsonSql, err := json.Marshal(map[string]interface{}{
+		"db_handle": handle,
 		"sql":       sql,
 	})
 	if err != nil {
@@ -248,8 +248,8 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 		WHERE c.UserName="%s"
 	`, wxid)
 
-	jsonSql, err := json.Marshal(map[string]string{
-		"db_handle": fmt.Sprint(handle),
+	jsonSql, err := json.Marshal(map[string]interface{}{
+		"db_handle": handle,
 		"sql":       sql,
 	})
 	if err != nil {
@@ -265,7 +265,7 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 	}
 
 	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
-		return nil, fmt.Errorf("user %s not found", wxid)
+		return nil, fmt.Errorf("group %s not found", wxid)
 	}
 
 	info := &GroupInfo{
@@ -276,6 +276,28 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 	if len(info.BigAvatar) == 0 {
 		info.BigAvatar = gjson.GetBytes(ret, "data.1.3").String()
 	}
+
+	sql = fmt.Sprintf(`SELECT Announcement FROM ChatRoomInfo WHERE ChatRoomName="%s"`, wxid)
+	jsonSql, err = json.Marshal(map[string]interface{}{
+		"db_handle": handle,
+		"sql":       sql,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err = post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
+		jsonSql,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
+		return nil, fmt.Errorf("group %s not found", wxid)
+	}
+	info.Notice = gjson.GetBytes(ret, "data.1.0").String()
 
 	return info, nil
 }

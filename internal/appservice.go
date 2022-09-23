@@ -355,6 +355,12 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 				event.Content = content
 				event.Reply = *reply
 			}
+		case 87:
+			content := parseNotice(as, msg)
+			if len(content) > 0 {
+				event.EventType = EventNotice
+				event.Content = content
+			}
 		default:
 			link := parseApp(as, msg)
 			if link != nil {

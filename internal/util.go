@@ -269,6 +269,20 @@ func parseReply(as *AppService, msg *WechatMessage) (string, *ReplyInfo) {
 	return titleNode.InnerText(), &ReplyInfo{ID: msgId, Sender: userNode.InnerText()}
 }
 
+func parseNotice(as *AppService, msg *WechatMessage) string {
+	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
+	if err != nil {
+		return ""
+	}
+
+	noticeNode := xmlquery.FindOne(doc, "/msg/appmsg/textannouncement")
+	if noticeNode == nil {
+		return ""
+	}
+
+	return noticeNode.InnerText()
+}
+
 func parseApp(as *AppService, msg *WechatMessage) *LinkData {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
