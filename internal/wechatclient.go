@@ -33,6 +33,8 @@ const (
 	WECHAT_DATABASE_GET_HANDLES         = 32
 	WECHAT_DATABASE_QUERY               = 34
 	WECHAT_GET_QROCDE_IMAGE             = 41
+
+	DB_MICRO_MSG = "MicroMsg.db"
 )
 
 type WechatClient struct {
@@ -177,15 +179,11 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		return nil, fmt.Errorf("user not logged")
 	}
 
-	ret, err := post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_GET_HANDLES),
-		[]byte("{}"),
-	)
+	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
 	if err != nil {
 		return nil, err
 	}
 
-	handle := gjson.GetBytes(ret, "data.0.handle").Int()
 	sql := fmt.Sprintf(`
 		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
 		FROM Contact AS c
@@ -202,7 +200,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		return nil, err
 	}
 
-	ret, err = post(
+	ret, err := post(
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
 		jsonSql,
 	)
@@ -231,15 +229,11 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 		return nil, fmt.Errorf("user not logged")
 	}
 
-	ret, err := post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_GET_HANDLES),
-		[]byte("{}"),
-	)
+	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
 	if err != nil {
 		return nil, err
 	}
 
-	handle := gjson.GetBytes(ret, "data.0.handle").Int()
 	sql := fmt.Sprintf(`
 		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
 		FROM Contact AS c
@@ -256,7 +250,7 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 		return nil, err
 	}
 
-	ret, err = post(
+	ret, err := post(
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
 		jsonSql,
 	)
@@ -346,25 +340,24 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 		return nil, fmt.Errorf("user not logged")
 	}
 
-	ret, err := post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_CONTACT_GET_LIST),
-		[]byte("{}"),
-	)
+	contacts, err := c.GetContacts()
 	if err != nil {
 		return nil, err
 	}
 
-	var resp GetFriendListResp
-	err = json.Unmarshal(ret, &resp)
-	if err != nil || resp.Result != "OK" {
-		log.Warnln("Failed to parse get_friend_list response", err)
-		return nil, err
-	}
-
 	var friends []*UserInfo
-	for _, f := range resp.Data {
-		if !strings.HasSuffix(f.ID, "@chatroom") {
-			friends = append(friends, f)
+	for _, c := range contacts {
+		if !strings.HasSuffix(c[0], "@chatroom") {
+			info := &UserInfo{
+				ID:        c[0],
+				Nickname:  c[1],
+				BigAvatar: c[2],
+			}
+			if len(info.BigAvatar) == 0 {
+				info.BigAvatar = c[3]
+			}
+
+			friends = append(friends, info)
 		}
 	}
 
@@ -376,25 +369,24 @@ func (c *WechatClient) GetGroupList() ([]*GroupInfo, error) {
 		return nil, fmt.Errorf("user not logged")
 	}
 
-	ret, err := post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_CONTACT_GET_LIST),
-		[]byte("{}"),
-	)
+	contacts, err := c.GetContacts()
 	if err != nil {
 		return nil, err
 	}
 
-	var resp GetGroupListResp
-	err = json.Unmarshal(ret, &resp)
-	if err != nil || resp.Result != "OK" {
-		log.Warnln("Failed to parse get_group_list response", err)
-		return nil, err
-	}
-
 	var groups []*GroupInfo
-	for _, f := range resp.Data {
-		if strings.HasSuffix(f.ID, "@chatroom") {
-			groups = append(groups, f)
+	for _, c := range contacts {
+		if strings.HasSuffix(c[0], "@chatroom") {
+			info := &GroupInfo{
+				ID:        c[0],
+				Name:      c[1],
+				BigAvatar: c[2],
+			}
+			if len(info.BigAvatar) == 0 {
+				info.BigAvatar = c[3]
+			}
+
+			groups = append(groups, info)
 		}
 	}
 
@@ -483,6 +475,72 @@ func (c *WechatClient) SendFile(target string, path string) error {
 	}
 
 	return nil
+}
+
+func (c *WechatClient) GetContacts() ([][4]string, error) {
+	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
+		FROM Contact AS c
+		LEFT JOIN ContactHeadImgUrl AS i
+			ON c.UserName = i.usrName
+	`)
+
+	jsonSql, err := json.Marshal(map[string]interface{}{
+		"db_handle": handle,
+		"sql":       sql,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
+		jsonSql,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
+		return [][4]string{}, nil
+	}
+
+	var result ContactResp
+	err = json.Unmarshal(ret, &result)
+	if err != nil || result.Result != "OK" {
+		log.Warnln("Failed to parse get contacts response", err)
+		return nil, err
+	}
+
+	return result.Data[1:], nil
+}
+
+func (c *WechatClient) getDbHandleByName(name string) (int64, error) {
+	if !c.IsLogin() {
+		return 0, fmt.Errorf("user not logged")
+	}
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_GET_HANDLES),
+		[]byte("{}"),
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	query := fmt.Sprintf(`data.#(db_name="%s").handle`, name)
+
+	result := gjson.GetBytes(ret, query)
+	if result.Exists() {
+		return result.Int(), nil
+	} else {
+		return 0, fmt.Errorf("db %s not found", name)
+	}
 }
 
 func post(url string, data []byte) ([]byte, error) {

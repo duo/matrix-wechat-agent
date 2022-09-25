@@ -69,6 +69,11 @@ type GetGroupMembersResp struct {
 	Result  string `json:"result"`
 }
 
+type ContactResp struct {
+	Data   [][4]string `json:"data,omitempty"`
+	Result string      `json:"result"`
+}
+
 type IsLoginData struct {
 	Status bool `json:"status"`
 }
@@ -171,6 +176,7 @@ type WechatMessage struct {
 	PID           int    `json:"pid"`
 	MsgID         uint64 `json:"msgid"`
 	Time          string `json:"time"`
+	Timestamp     int64  `json:"timestamp"`
 	WxID          string `json:"wxid"`
 	Sender        string `json:"sender"`
 	Self          string `json:"self"`

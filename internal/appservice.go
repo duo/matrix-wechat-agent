@@ -240,14 +240,21 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 
 	log.Debugln("Handle wechat message: %+v", msg)
 
-	tm, err := time.ParseInLocation("2006-01-02 15:04:05", msg.Time, time.Local)
-	if err != nil {
-		log.Warnf("Failed to parse time %s: %v", msg.Time, err)
+	var ts int64
+	if msg.Timestamp > 0 {
+		ts = msg.Timestamp * 1000
+	} else {
+		tm, err := time.ParseInLocation("2006-01-02 15:04:05", msg.Time, time.Local)
+		if err != nil {
+			log.Warnf("Failed to parse time %s: %v", msg.Time, err)
+			return
+		}
+		ts = tm.UnixMilli()
 	}
 	event := &WebsocketEventReqeust{
 		MXID:      mxid,
 		ID:        msg.MsgID,
-		Timestamp: tm.UnixMilli(),
+		Timestamp: ts,
 		Target:    msg.Sender,
 		EventType: EventText,
 		Content:   msg.Message,
@@ -374,7 +381,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 
 	as.wsWriteLock.Lock()
 	log.Debugf("Sending evnet %+v", event)
-	err = ws.WriteJSON(&event)
+	err := ws.WriteJSON(&event)
 	as.wsWriteLock.Unlock()
 	if err != nil {
 		log.Warnf("Failed to send event %d: %v", msg.MsgID, err)
