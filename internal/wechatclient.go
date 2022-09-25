@@ -34,7 +34,8 @@ const (
 	WECHAT_DATABASE_QUERY               = 34
 	WECHAT_GET_QROCDE_IMAGE             = 41
 
-	DB_MICRO_MSG = "MicroMsg.db"
+	DB_MICRO_MSG      = "MicroMsg.db"
+	DB_OPENIM_CONTACT = "OpenIMContact.db"
 )
 
 type WechatClient struct {
@@ -179,18 +180,35 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		return nil, fmt.Errorf("user not logged")
 	}
 
-	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
-	if err != nil {
-		return nil, err
-	}
+	var handle int64
+	var sql string
+	var err error
 
-	sql := fmt.Sprintf(`
-		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
-		FROM Contact AS c
-		LEFT JOIN ContactHeadImgUrl AS i
-			ON c.UserName = i.usrName
-		WHERE c.UserName="%s"
-	`, wxid)
+	if strings.HasSuffix(wxid, "@openim") {
+		handle, err = c.getDbHandleByName(DB_OPENIM_CONTACT)
+		if err != nil {
+			return nil, err
+		}
+
+		sql = fmt.Sprintf(`
+			SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl
+			FROM OpenIMContact
+			WHERE UserName="%s"
+		`, wxid)
+	} else {
+		handle, err = c.getDbHandleByName(DB_MICRO_MSG)
+		if err != nil {
+			return nil, err
+		}
+
+		sql = fmt.Sprintf(`
+			SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
+			FROM Contact AS c
+			LEFT JOIN ContactHeadImgUrl AS i
+				ON c.UserName = i.usrName
+			WHERE c.UserName="%s"
+		`, wxid)
+	}
 
 	jsonSql, err := json.Marshal(map[string]interface{}{
 		"db_handle": handle,
@@ -361,6 +379,24 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 		}
 	}
 
+	openIMContacts, err := c.GetOpenIMContacts()
+	if err == nil {
+		for _, c := range openIMContacts {
+			if !strings.HasSuffix(c[0], "@chatroom") {
+				info := &UserInfo{
+					ID:        c[0],
+					Nickname:  c[1],
+					BigAvatar: c[2],
+				}
+				if len(info.BigAvatar) == 0 {
+					info.BigAvatar = c[3]
+				}
+
+				friends = append(friends, info)
+			}
+		}
+	}
+
 	return friends, nil
 }
 
@@ -475,6 +511,47 @@ func (c *WechatClient) SendFile(target string, path string) error {
 	}
 
 	return nil
+}
+
+func (c *WechatClient) GetOpenIMContacts() ([][4]string, error) {
+	handle, err := c.getDbHandleByName(DB_OPENIM_CONTACT)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl
+		FROM OpenIMContact
+	`)
+
+	jsonSql, err := json.Marshal(map[string]interface{}{
+		"db_handle": handle,
+		"sql":       sql,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
+		jsonSql,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
+		return [][4]string{}, nil
+	}
+
+	var result ContactResp
+	err = json.Unmarshal(ret, &result)
+	if err != nil || result.Result != "OK" {
+		log.Warnln("Failed to parse get contacts response", err)
+		return nil, err
+	}
+
+	return result.Data[1:], nil
 }
 
 func (c *WechatClient) GetContacts() ([][4]string, error) {
