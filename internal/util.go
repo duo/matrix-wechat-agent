@@ -132,7 +132,14 @@ func downloadVideo(as *AppService, msg *WechatMessage) *BlobData {
 	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
 	defer cancel()
 
-	videoFile := filepath.Join(as.Docdir, msg.FilePath)
+	var videoFile string
+	if len(msg.FilePath) > 0 {
+		videoFile = filepath.Join(as.Docdir, msg.FilePath)
+	} else {
+		videoFile = filepath.Join(as.Docdir, msg.Thumbnail)
+		videoFile = strings.TrimSuffix(videoFile, filepath.Ext(videoFile))
+		videoFile += ".mp4"
+	}
 	for {
 		if PathExists(videoFile) {
 			data, err := os.ReadFile(videoFile)

@@ -294,7 +294,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 			event.Content = "[语音下载失败]"
 		}
 	case 43: // Video
-		if len(msg.FilePath) == 0 {
+		if len(msg.FilePath) == 0 && len(msg.Thumbnail) == 0 {
 			return
 		}
 		blob := downloadVideo(as, msg)
