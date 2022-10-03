@@ -318,6 +318,20 @@ func parseApp(as *AppService, msg *WechatMessage) *LinkData {
 	}
 }
 
+func parseRevoke(as *AppService, msg *WechatMessage) string {
+	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
+	if err != nil {
+		return ""
+	}
+
+	revokeNode := xmlquery.FindOne(doc, "/revokemsg")
+	if revokeNode == nil {
+		return ""
+	}
+
+	return revokeNode.InnerText()
+}
+
 func downloadFile(as *AppService, msg *WechatMessage) *BlobData {
 	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
 	defer cancel()

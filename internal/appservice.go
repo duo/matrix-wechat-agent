@@ -377,6 +377,12 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 				event.Content = "[应用解析失败]"
 			}
 		}
+	case 10000: // revoke
+		content := parseRevoke(as, msg)
+		if len(content) > 0 {
+			event.EventType = EventRevoke
+			event.Content = content
+		}
 	}
 
 	as.wsWriteLock.Lock()

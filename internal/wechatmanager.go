@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -24,7 +25,6 @@ var (
 
 const (
 	listenPort        = 22222
-	is64Bit           = uint64(^uintptr(0)) == ^uint64(0)
 	ClientInitTiemout = 10 * time.Second
 )
 
@@ -50,7 +50,7 @@ func GetWechatManager() *WechatManager {
 		instance.portSeq = listenPort
 
 		var driverDLL string
-		if is64Bit {
+		if runtime.GOARCH == "amd64" {
 			driverDLL = "wxDriver64.dll"
 		} else {
 			driverDLL = "wxDriver.dll"
