@@ -232,7 +232,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 
 	// Skip message sent by hook
 	if msg.IsSendByPhone == 0 {
-		as.cache.Set(msg.MsgID, true)
+		as.cache.Set(msg.MsgID, struct{}{})
 		return
 	} else if _, ok := as.cache.Get(msg.MsgID); ok {
 		return
@@ -297,6 +297,11 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 		if len(msg.FilePath) == 0 && len(msg.Thumbnail) == 0 {
 			return
 		}
+		if _, ok := as.cache.Get(msg.MsgID); ok {
+			return
+		}
+		as.cache.Set(msg.MsgID, struct{}{})
+
 		blob := downloadVideo(as, msg)
 		if blob != nil {
 			event.EventType = EventVideo
@@ -331,7 +336,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 			if !strings.HasPrefix(msg.Message, "<?xml") {
 				return
 			}
-			if _, ok := as.cache.Set(msg.MsgID, true); ok {
+			if _, ok := as.cache.Set(msg.MsgID, struct{}{}); ok {
 				return
 			}
 			blob := downloadFile(as, msg)
