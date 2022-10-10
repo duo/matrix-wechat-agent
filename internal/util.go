@@ -50,7 +50,9 @@ func getMentions(as *AppService, msg *WechatMessage) []string {
 		return nil
 	}
 
-	return strings.Split(atuserNode.InnerText(), ",")
+	return strings.FieldsFunc(strings.TrimSpace(atuserNode.InnerText()), func(r rune) bool {
+		return r == ','
+	})
 }
 
 func downloadImage(as *AppService, msg *WechatMessage) *BlobData {
