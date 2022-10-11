@@ -186,6 +186,6 @@ type WechatMessage struct {
 	MsgType       int    `json:"type"`
 	Message       string `json:"message"`
 	FilePath      string `json:"filepath"`
-	Thumbnail     string `json:"thumbnail"`
+	Thumbnail     string `json:"thumb_path"`
 	ExtraInfo     string `json:"extrainfo"`
 }

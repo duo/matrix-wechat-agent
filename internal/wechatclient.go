@@ -33,6 +33,7 @@ const (
 	WECHAT_DATABASE_GET_HANDLES         = 32
 	WECHAT_DATABASE_QUERY               = 34
 	WECHAT_GET_QROCDE_IMAGE             = 41
+	WECHAT_LOGOUT                       = 44
 
 	DB_MICRO_MSG      = "MicroMsg.db"
 	DB_OPENIM_CONTACT = "OpenIMContact.db"
@@ -60,6 +61,8 @@ func (c *WechatClient) Dispose() error {
 	if err != nil {
 		return err
 	}
+
+	c.Logout()
 
 	if ok {
 		children, err := c.proc.Children()
@@ -131,6 +134,15 @@ func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
 	} else {
 		return nil, fmt.Errorf("%v", resp.Message)
 	}
+}
+
+func (c *WechatClient) Logout() error {
+	_, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_LOGOUT),
+		[]byte("{}"),
+	)
+
+	return err
 }
 
 func (c *WechatClient) IsLogin() bool {
