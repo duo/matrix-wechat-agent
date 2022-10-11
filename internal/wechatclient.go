@@ -203,7 +203,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		}
 
 		sql = fmt.Sprintf(`
-			SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl
+			SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl, Remark
 			FROM OpenIMContact
 			WHERE UserName="%s"
 		`, wxid)
@@ -214,7 +214,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		}
 
 		sql = fmt.Sprintf(`
-			SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
+			SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl, c.Remark
 			FROM Contact AS c
 			LEFT JOIN ContactHeadImgUrl AS i
 				ON c.UserName = i.usrName
@@ -246,6 +246,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		ID:        gjson.GetBytes(ret, "data.1.0").String(),
 		Nickname:  gjson.GetBytes(ret, "data.1.1").String(),
 		BigAvatar: gjson.GetBytes(ret, "data.1.2").String(),
+		Remark:    gjson.GetBytes(ret, "data.1.4").String(),
 	}
 	if len(info.BigAvatar) == 0 {
 		info.BigAvatar = gjson.GetBytes(ret, "data.1.3").String()
@@ -382,6 +383,7 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 				ID:        c[0],
 				Nickname:  c[1],
 				BigAvatar: c[2],
+				Remark:    c[4],
 			}
 			if len(info.BigAvatar) == 0 {
 				info.BigAvatar = c[3]
@@ -399,6 +401,7 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 					ID:        c[0],
 					Nickname:  c[1],
 					BigAvatar: c[2],
+					Remark:    c[4],
 				}
 				if len(info.BigAvatar) == 0 {
 					info.BigAvatar = c[3]
@@ -525,14 +528,14 @@ func (c *WechatClient) SendFile(target string, path string) error {
 	return nil
 }
 
-func (c *WechatClient) GetOpenIMContacts() ([][4]string, error) {
+func (c *WechatClient) GetOpenIMContacts() ([][5]string, error) {
 	handle, err := c.getDbHandleByName(DB_OPENIM_CONTACT)
 	if err != nil {
 		return nil, err
 	}
 
 	sql := fmt.Sprintf(`
-		SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl
+		SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl, Remark
 		FROM OpenIMContact
 	`)
 
@@ -553,7 +556,7 @@ func (c *WechatClient) GetOpenIMContacts() ([][4]string, error) {
 	}
 
 	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
-		return [][4]string{}, nil
+		return [][5]string{}, nil
 	}
 
 	var result ContactResp
@@ -566,14 +569,14 @@ func (c *WechatClient) GetOpenIMContacts() ([][4]string, error) {
 	return result.Data[1:], nil
 }
 
-func (c *WechatClient) GetContacts() ([][4]string, error) {
+func (c *WechatClient) GetContacts() ([][5]string, error) {
 	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
 	if err != nil {
 		return nil, err
 	}
 
 	sql := fmt.Sprintf(`
-		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl
+		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl, c.Remark
 		FROM Contact AS c
 		LEFT JOIN ContactHeadImgUrl AS i
 			ON c.UserName = i.usrName
@@ -596,7 +599,7 @@ func (c *WechatClient) GetContacts() ([][4]string, error) {
 	}
 
 	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
-		return [][4]string{}, nil
+		return [][5]string{}, nil
 	}
 
 	var result ContactResp

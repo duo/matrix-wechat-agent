@@ -71,7 +71,7 @@ type GetGroupMembersResp struct {
 }
 
 type ContactResp struct {
-	Data   [][4]string `json:"data,omitempty"`
+	Data   [][5]string `json:"data,omitempty"`
 	Result string      `json:"result"`
 }
 
@@ -95,6 +95,7 @@ type UserInfo struct {
 	ID        string `json:"wxId"`
 	Nickname  string `json:"wxNickName"`
 	BigAvatar string `json:"wxBigAvatar"`
+	Remark    string `json:"wxRemark"`
 }
 
 type GroupInfo struct {
