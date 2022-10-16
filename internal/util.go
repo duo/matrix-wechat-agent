@@ -385,7 +385,7 @@ func parseSystemMessage(as *AppService, msg *WechatMessage) string {
 		return replaceNode.InnerText()
 	}
 
-	return msg.Message
+	return ""
 }
 
 func downloadFile(as *AppService, msg *WechatMessage) *BlobData {

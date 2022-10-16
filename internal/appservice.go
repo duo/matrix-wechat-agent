@@ -231,7 +231,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 	ws := as.ws
 
 	// Skip message sent by hook
-	if msg.IsSendByPhone == 0 {
+	if msg.IsSendByPhone == 0 && msg.MsgType != 10000 {
 		as.cache.Set(msg.MsgID, struct{}{})
 		return
 	} else if _, ok := as.cache.Get(msg.MsgID); ok {
@@ -401,6 +401,18 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 		}
 		event.EventType = EventSystem
 		event.Content = parseSystemMessage(as, msg)
+		if len(event.Content) == 0 {
+			return
+		}
+		// FIXME:
+		if event.Content == "You recalled a message" || event.Content == "你撤回了一条消息" {
+			if strings.HasSuffix(msg.Sender, "@chatroom") {
+				event.Sender = msg.Self
+			} else {
+				event.Sender = msg.Self
+				event.Target = msg.WxID
+			}
+		}
 	}
 
 	as.wsWriteLock.Lock()
