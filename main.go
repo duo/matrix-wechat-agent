@@ -56,8 +56,7 @@ func main() {
 
 	var as internal.AppService
 
-	docdir := internal.GetWechatDocdir()
-	workdir := filepath.Join(docdir, "matrix")
+	workdir := filepath.Join(internal.GetDocDir(), "matrix_wechat_agent")
 	if !internal.PathExists(workdir) {
 		if err := os.MkdirAll(workdir, 0o644); err != nil {
 			log.Fatalf("Failed to create temp folder: %v", err)
@@ -65,7 +64,7 @@ func main() {
 	}
 
 	as.Workdir = workdir
-	as.Docdir = docdir
+	as.Docdir = internal.GetWechatDocdir()
 
 	go internal.GetWechatManager().Serve(&as)
 

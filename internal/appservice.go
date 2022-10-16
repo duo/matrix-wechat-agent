@@ -269,6 +269,8 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 	}
 
 	switch msg.MsgType {
+	case 0: // unknown
+		return
 	case 1: // Txt
 		mentions := getMentions(as, msg)
 		if mentions != nil {
@@ -382,12 +384,23 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 				event.Content = "[应用解析失败]"
 			}
 		}
+	case 50: // private voip
+		event.EventType = EventVoIP
+		event.Content = parsePrivateVoIP(as, msg)
+	case 51: // last message
+		return
 	case 10000: // revoke
 		content := parseRevoke(as, msg)
 		if len(content) > 0 {
 			event.EventType = EventRevoke
 			event.Content = content
 		}
+	case 10002: // group voip
+		if msg.Sender == "weixin" || msg.IsSendMsg == 1 {
+			return
+		}
+		event.EventType = EventVoIP
+		event.Content = parseGroupVoIP(as, msg)
 	}
 
 	as.wsWriteLock.Lock()

@@ -32,6 +32,7 @@ const (
 	WECHAT_CHATROOM_GET_MEMBER_NICKNAME = 26
 	WECHAT_DATABASE_GET_HANDLES         = 32
 	WECHAT_DATABASE_QUERY               = 34
+	WECHAT_MSG_FORWARD_MESSAGE          = 40
 	WECHAT_GET_QROCDE_IMAGE             = 41
 	WECHAT_LOGOUT                       = 44
 
@@ -457,11 +458,8 @@ func (c *WechatClient) SendText(target string, content string) error {
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_SEND_TEXT),
 		data,
 	)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func (c *WechatClient) SendAtText(target string, content string, mentions []string) error {
@@ -481,11 +479,8 @@ func (c *WechatClient) SendAtText(target string, content string, mentions []stri
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_SEND_AT),
 		data,
 	)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func (c *WechatClient) SendImage(target string, path string) error {
@@ -501,11 +496,8 @@ func (c *WechatClient) SendImage(target string, path string) error {
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_SEND_IMAGE),
 		data,
 	)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func (c *WechatClient) SendFile(target string, path string) error {
@@ -521,11 +513,25 @@ func (c *WechatClient) SendFile(target string, path string) error {
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_SEND_FILE),
 		data,
 	)
+
+	return err
+}
+
+func (c *WechatClient) ForwardMessage(target string, msgid uint64) error {
+	data, err := json.Marshal(map[string]interface{}{
+		"wxid":  target,
+		"msgid": msgid,
+	})
 	if err != nil {
 		return err
 	}
 
-	return nil
+	_, err = post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_FORWARD_MESSAGE),
+		data,
+	)
+
+	return err
 }
 
 func (c *WechatClient) GetOpenIMContacts() ([][5]string, error) {

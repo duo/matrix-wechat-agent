@@ -334,6 +334,56 @@ func parseRevoke(as *AppService, msg *WechatMessage) string {
 	return revokeNode.InnerText()
 }
 
+func parsePrivateVoIP(as *AppService, msg *WechatMessage) string {
+	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
+	if err != nil {
+		return ""
+	}
+
+	inviteNode := xmlquery.FindOne(doc, "/voipinvitemsg")
+	if inviteNode != nil {
+		statusNode := xmlquery.FindOne(doc, "/voipinvitemsg/status")
+		if statusNode != nil {
+			switch statusNode.InnerText() {
+			case "1":
+				return "VoIP: Started a call"
+			case "2":
+				return "VoIP: Call ended"
+			default:
+				return fmt.Sprintf("VoIP: Unknown status %s", statusNode.InnerText())
+			}
+		}
+	}
+	bubbleNode := xmlquery.FindOne(doc, "/voipmsg")
+	if bubbleNode != nil {
+		msgNode := xmlquery.FindOne(doc, "//msg")
+		if msgNode != nil {
+			return fmt.Sprintf("VoIP: %s", msgNode.InnerText())
+		}
+	}
+
+	return ""
+}
+
+func parseGroupVoIP(as *AppService, msg *WechatMessage) string {
+	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
+	if err != nil {
+		return ""
+	}
+
+	// TODO:
+	inviteNode := xmlquery.FindOne(doc, "/sysmsg/voipmt/invite")
+	if inviteNode != nil {
+		return fmt.Sprintf("VoIP: %s", inviteNode.InnerText())
+	}
+	bannerNode := xmlquery.FindOne(doc, "/sysmsg/voipmt/banner")
+	if bannerNode != nil {
+		return fmt.Sprintf("VoIP: %s", bannerNode.InnerText())
+	}
+
+	return ""
+}
+
 func downloadFile(as *AppService, msg *WechatMessage) *BlobData {
 	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
 	defer cancel()
@@ -379,7 +429,7 @@ func PathExists(path string) bool {
 	return err == nil || errors.Is(err, os.ErrExist)
 }
 
-func GetWechatDocdir() string {
+func GetDocDir() string {
 	u, _ := user.Current()
 	baseDir := filepath.Join(u.HomeDir, "Documents")
 
@@ -387,6 +437,12 @@ func GetWechatDocdir() string {
 	if !PathExists(baseDir) {
 		baseDir = filepath.Join(u.HomeDir, "My Documents")
 	}
+
+	return baseDir
+}
+
+func GetWechatDocdir() string {
+	baseDir := GetDocDir()
 
 	regKey, err := registry.OpenKey(registry.CURRENT_USER, "SOFTWARE\\Tencent\\WeChat", registry.QUERY_VALUE)
 	if err == nil {
