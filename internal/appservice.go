@@ -395,12 +395,12 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 			event.EventType = EventRevoke
 			event.Content = content
 		}
-	case 10002: // group voip
+	case 10002: // system
 		if msg.Sender == "weixin" || msg.IsSendMsg == 1 {
 			return
 		}
-		event.EventType = EventVoIP
-		event.Content = parseGroupVoIP(as, msg)
+		event.EventType = EventSystem
+		event.Content = parseSystemMessage(as, msg)
 	}
 
 	as.wsWriteLock.Lock()

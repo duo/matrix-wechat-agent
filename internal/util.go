@@ -365,7 +365,7 @@ func parsePrivateVoIP(as *AppService, msg *WechatMessage) string {
 	return ""
 }
 
-func parseGroupVoIP(as *AppService, msg *WechatMessage) string {
+func parseSystemMessage(as *AppService, msg *WechatMessage) string {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return ""
@@ -380,8 +380,12 @@ func parseGroupVoIP(as *AppService, msg *WechatMessage) string {
 	if bannerNode != nil {
 		return fmt.Sprintf("VoIP: %s", bannerNode.InnerText())
 	}
+	replaceNode := xmlquery.FindOne(doc, "/sysmsg/revokemsg/replacemsg")
+	if replaceNode != nil {
+		return replaceNode.InnerText()
+	}
 
-	return ""
+	return msg.Message
 }
 
 func downloadFile(as *AppService, msg *WechatMessage) *BlobData {

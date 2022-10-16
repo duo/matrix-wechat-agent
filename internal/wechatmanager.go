@@ -295,6 +295,18 @@ func (m *WechatManager) SendMessage(mxid string, msg *MatrixMessage) error {
 	return nil
 }
 
+func (m *WechatManager) ForwardMessage(mxid string, target string, msgid uint64) error {
+	m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
+
+	client, ok := m.clients[mxid]
+	if !ok {
+		return fmt.Errorf("client not found")
+	}
+
+	return client.ForwardMessage(target, msgid)
+}
+
 func (m *WechatManager) Serve(as *AppService) {
 	m.as = as
 
