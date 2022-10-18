@@ -267,7 +267,10 @@ func parseReply(as *AppService, msg *WechatMessage) (string, *ReplyInfo) {
 
 	userNode := xmlquery.FindOne(doc, "/msg/appmsg/refermsg/chatusr")
 	if userNode == nil || len(userNode.InnerText()) == 0 {
-		return "", nil
+		userNode = xmlquery.FindOne(doc, "/msg/appmsg/refermsg/fromusr")
+		if userNode == nil || len(userNode.InnerText()) == 0 {
+			return "", nil
+		}
 	}
 
 	msgId, err := strconv.ParseUint(svridNode.InnerText(), 10, 64)
