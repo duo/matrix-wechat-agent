@@ -375,6 +375,7 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 				event.EventType = EventNotice
 				event.Content = content
 			}
+		//case 2000: // Transfer
 		default:
 			link := parseApp(as, msg)
 			if link != nil {
@@ -394,6 +395,8 @@ func (as *AppService) handleWechatMessage(mxid string, msg *WechatMessage) {
 		if len(content) > 0 {
 			event.EventType = EventRevoke
 			event.Content = content
+		} else {
+			event.EventType = EventSystem
 		}
 	case 10002: // system
 		if msg.Sender == "weixin" || msg.IsSendMsg == 1 {

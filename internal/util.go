@@ -383,10 +383,12 @@ func parseSystemMessage(as *AppService, msg *WechatMessage) string {
 	if bannerNode != nil {
 		return fmt.Sprintf("VoIP: %s", bannerNode.InnerText())
 	}
-	replaceNode := xmlquery.FindOne(doc, "/sysmsg/revokemsg/replacemsg")
-	if replaceNode != nil {
-		return replaceNode.InnerText()
-	}
+	/*
+		replaceNode := xmlquery.FindOne(doc, "/sysmsg/revokemsg/replacemsg")
+		if replaceNode != nil {
+			return replaceNode.InnerText()
+		}
+	*/
 
 	return ""
 }
