@@ -423,8 +423,12 @@ func saveBlob(as *AppService, msg *MatrixMessage) string {
 		return ""
 	}
 
-	fileName := fmt.Sprintf("%x%s", md5.Sum(data.Binary), filepath.Ext(data.Name))
-	path := filepath.Join(as.Workdir, fileName)
+	var path string
+	if len(data.Name) > 0 {
+		path = filepath.Join(as.Workdir, data.Name)
+	} else {
+		path = filepath.Join(as.Workdir, fmt.Sprintf("%x", md5.Sum(data.Binary)))
+	}
 
 	if err := os.WriteFile(path, data.Binary, 0o644); err != nil {
 		return ""
