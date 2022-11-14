@@ -29,7 +29,8 @@ const (
 )
 
 type WechatManager struct {
-	as *AppService
+	as      *AppService
+	version string
 
 	funcNewWechat   uintptr
 	funcStartListen uintptr
@@ -90,6 +91,10 @@ func (m *WechatManager) Dispose() {
 	}
 }
 
+func (m *WechatManager) SetVersion(version string) {
+	m.version = version
+}
+
 func (m *WechatManager) Connect(mxid string, path string) error {
 	m.clientsLock.Lock()
 	defer m.clientsLock.Unlock()
@@ -132,6 +137,13 @@ func (m *WechatManager) Connect(mxid string, path string) error {
 	for {
 		err = client.HookMsg(path)
 		if err == nil {
+			if len(m.version) > 0 {
+				if err := client.SetVersion(m.version); err != nil {
+					log.Warnln("Failed to set version", err)
+				} else {
+					log.Infoln("Set wechat version to", m.version)
+				}
+			}
 			return nil
 		}
 

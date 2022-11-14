@@ -32,6 +32,7 @@ const (
 	WECHAT_CHATROOM_GET_MEMBER_NICKNAME = 26
 	WECHAT_DATABASE_GET_HANDLES         = 32
 	WECHAT_DATABASE_QUERY               = 34
+	WECHAT_SET_VERSION                  = 35
 	WECHAT_MSG_FORWARD_MESSAGE          = 40
 	WECHAT_GET_QROCDE_IMAGE             = 41
 	WECHAT_LOGOUT                       = 44
@@ -114,6 +115,22 @@ func (c *WechatClient) HookMsg(savePath string) error {
 	}
 
 	return nil
+}
+
+func (c *WechatClient) SetVersion(version string) error {
+	data, err := json.Marshal(map[string]string{
+		"version": version,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_SET_VERSION),
+		data,
+	)
+
+	return err
 }
 
 func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {

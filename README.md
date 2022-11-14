@@ -15,3 +15,10 @@ GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go
 ```sh
 matrix-wechat-agent.exe -h wss://example.com:port -s foobar
 ```
+
+### Parameters
+| Parameter | Function            |
+| :-------: | ------------------- |
+|   `-h`    | appservice address  |
+|   `-s`    | secret              |
+|   `-V`    | wechat fake version |

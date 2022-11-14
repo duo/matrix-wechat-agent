@@ -22,16 +22,18 @@ const (
 )
 
 var (
-	host   string
-	secret string
+	host    string
+	secret  string
+	version string
 
 	websocketStarted chan struct{}
 	stopPinger       chan struct{}
 )
 
 func init() {
-	flag.StringVar(&host, "h", "", "appservice addres")
+	flag.StringVar(&host, "h", "", "appservice address")
 	flag.StringVar(&secret, "s", "", "secret")
+	flag.StringVar(&version, "V", "", "fake version")
 }
 
 func main() {
@@ -65,6 +67,8 @@ func main() {
 
 	as.Workdir = workdir
 	as.Docdir = internal.GetWechatDocdir()
+
+	internal.GetWechatManager().SetVersion(version)
 
 	go internal.GetWechatManager().Serve(&as)
 
