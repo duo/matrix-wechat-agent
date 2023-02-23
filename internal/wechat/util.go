@@ -1,26 +1,28 @@
-package internal
+package wechat
 
 import (
 	"compress/gzip"
 	"context"
 	"crypto/md5"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/duo/matrix-wechat-agent/internal/common"
 
 	"github.com/antchfx/xmlquery"
 	"golang.org/x/sys/windows/registry"
 )
-
-const MediaDownloadTiemout = 30 * time.Second
 
 var (
 	httpClient = &http.Client{
@@ -35,7 +37,23 @@ var (
 	UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66"
 )
 
-func getMentions(as *AppService, msg *WechatMessage) []string {
+func LoadDriver() syscall.Handle {
+	var driverDLL string
+	if runtime.GOARCH == "amd64" {
+		driverDLL = "wxDriver64.dll"
+	} else {
+		driverDLL = "wxDriver.dll"
+	}
+
+	driver, err := syscall.LoadLibrary(driverDLL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return driver
+}
+
+func getMentions(s *Service, msg *WechatMessage) []string {
 	if len(msg.ExtraInfo) == 0 {
 		return nil
 	}
@@ -55,13 +73,14 @@ func getMentions(as *AppService, msg *WechatMessage) []string {
 	})
 }
 
-func downloadImage(as *AppService, msg *WechatMessage) *BlobData {
-	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
+func downloadImage(s *Service, msg *WechatMessage) *common.BlobData {
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.Wechat.RequestTimeout)
 	defer cancel()
 
-	imageFile := filepath.Join(as.Workdir, msg.Self, filepath.Base(msg.FilePath))
+	imageFile := filepath.Join(s.workdir, msg.Self, filepath.Base(msg.FilePath))
 
 	baseFile := strings.TrimSuffix(imageFile, filepath.Ext(imageFile))
+	fileName := filepath.Base(msg.FilePath)
 	pngFile := baseFile + ".png"
 	gifFile := baseFile + ".gif"
 	jpgFile := baseFile + ".jpg"
@@ -70,19 +89,22 @@ func downloadImage(as *AppService, msg *WechatMessage) *BlobData {
 		var data []byte
 		var err error
 		switch {
-		case PathExists(baseFile):
+		case pathExists(baseFile):
 			data, err = os.ReadFile(baseFile)
-		case PathExists(pngFile):
+		case pathExists(pngFile):
+			fileName = fileName + ".png"
 			data, err = os.ReadFile(pngFile)
-		case PathExists(gifFile):
+		case pathExists(gifFile):
+			fileName = fileName + ".gif"
 			data, err = os.ReadFile(gifFile)
-		case PathExists(jpgFile):
+		case pathExists(jpgFile):
+			fileName = fileName + ".jpg"
 			data, err = os.ReadFile(jpgFile)
 		}
 
 		if err == nil && data != nil {
-			return &BlobData{
-				Name:   filepath.Base(msg.FilePath),
+			return &common.BlobData{
+				Name:   fileName,
 				Binary: data,
 			}
 		}
@@ -95,7 +117,7 @@ func downloadImage(as *AppService, msg *WechatMessage) *BlobData {
 	}
 }
 
-func downloadVoice(as *AppService, msg *WechatMessage) *BlobData {
+func downloadVoice(s *Service, msg *WechatMessage, client *Client) *common.BlobData {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return nil
@@ -107,16 +129,29 @@ func downloadVoice(as *AppService, msg *WechatMessage) *BlobData {
 	}
 	path := node.InnerText()
 
-	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.Wechat.RequestTimeout)
 	defer cancel()
 
-	voiceFile := filepath.Join(as.Workdir, msg.Self, path+".amr")
+	voiceFile := filepath.Join(s.workdir, msg.Self, path+".amr")
 	for {
-		if PathExists(voiceFile) {
+		// check from disk
+		if pathExists(voiceFile) {
 			data, err := os.ReadFile(voiceFile)
 			if err == nil && data != nil {
-				return &BlobData{
+				return &common.BlobData{
 					Name:   filepath.Base(voiceFile),
+					Binary: data,
+				}
+			}
+		}
+
+		// check from db
+		if client != nil {
+			if data, err := client.GetVoice(msg.MsgID); err != nil {
+				return nil
+			} else if data != nil {
+				return &common.BlobData{
+					Name:   path + ".amr",
 					Binary: data,
 				}
 			}
@@ -130,23 +165,23 @@ func downloadVoice(as *AppService, msg *WechatMessage) *BlobData {
 	}
 }
 
-func downloadVideo(as *AppService, msg *WechatMessage) *BlobData {
-	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
+func downloadVideo(s *Service, msg *WechatMessage) *common.BlobData {
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.Wechat.RequestTimeout)
 	defer cancel()
 
 	var videoFile string
 	if len(msg.FilePath) > 0 {
-		videoFile = filepath.Join(as.Docdir, msg.FilePath)
+		videoFile = filepath.Join(s.docdir, msg.FilePath)
 	} else {
-		videoFile = filepath.Join(as.Docdir, msg.Thumbnail)
+		videoFile = filepath.Join(s.docdir, msg.Thumbnail)
 		videoFile = strings.TrimSuffix(videoFile, filepath.Ext(videoFile))
 		videoFile += ".mp4"
 	}
 	for {
-		if PathExists(videoFile) {
+		if pathExists(videoFile) {
 			data, err := os.ReadFile(videoFile)
 			if err == nil && data != nil {
-				return &BlobData{
+				return &common.BlobData{
 					Name:   filepath.Base(videoFile),
 					Binary: data,
 				}
@@ -161,7 +196,7 @@ func downloadVideo(as *AppService, msg *WechatMessage) *BlobData {
 	}
 }
 
-func downloadSticker(as *AppService, msg *WechatMessage) *BlobData {
+func downloadSticker(s *Service, msg *WechatMessage) *common.BlobData {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return nil
@@ -180,7 +215,7 @@ func downloadSticker(as *AppService, msg *WechatMessage) *BlobData {
 
 	data, err := GetBytes(url)
 	if err == nil {
-		return &BlobData{
+		return &common.BlobData{
 			Name:   hash,
 			Binary: data,
 		}
@@ -189,7 +224,7 @@ func downloadSticker(as *AppService, msg *WechatMessage) *BlobData {
 	}
 }
 
-func parseLocation(as *AppService, msg *WechatMessage) *LocationData {
+func parseLocation(s *Service, msg *WechatMessage) *common.LocationData {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return nil
@@ -222,7 +257,7 @@ func parseLocation(as *AppService, msg *WechatMessage) *LocationData {
 		label = labelNode.InnerText()
 	}
 
-	return &LocationData{
+	return &common.LocationData{
 		Name:      name,
 		Address:   label,
 		Latitude:  latitude,
@@ -230,7 +265,7 @@ func parseLocation(as *AppService, msg *WechatMessage) *LocationData {
 	}
 }
 
-func getAppType(as *AppService, msg *WechatMessage) int {
+func getAppType(s *Service, msg *WechatMessage) int {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return 0
@@ -249,7 +284,7 @@ func getAppType(as *AppService, msg *WechatMessage) int {
 	return 0
 }
 
-func parseReply(as *AppService, msg *WechatMessage) (string, *ReplyInfo) {
+func parseReply(s *Service, msg *WechatMessage) (string, *common.ReplyInfo) {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return "", nil
@@ -278,10 +313,10 @@ func parseReply(as *AppService, msg *WechatMessage) (string, *ReplyInfo) {
 		return "", nil
 	}
 
-	return titleNode.InnerText(), &ReplyInfo{ID: msgId, Sender: userNode.InnerText()}
+	return titleNode.InnerText(), &common.ReplyInfo{ID: fmt.Sprint(msgId), Sender: userNode.InnerText()}
 }
 
-func parseNotice(as *AppService, msg *WechatMessage) string {
+func parseNotice(s *Service, msg *WechatMessage) string {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return ""
@@ -295,35 +330,132 @@ func parseNotice(as *AppService, msg *WechatMessage) string {
 	return noticeNode.InnerText()
 }
 
-func parseApp(as *AppService, msg *WechatMessage) *LinkData {
+func parseCard(s *Service, msg *WechatMessage) *common.AppData {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return nil
 	}
 
-	titleNode := xmlquery.FindOne(doc, "/msg/appmsg/title")
-	if titleNode == nil || len(titleNode.InnerText()) == 0 {
+	node := xmlquery.FindOne(doc, "/msg")
+	if node == nil {
 		return nil
 	}
-	var url string
-	urlNode := xmlquery.FindOne(doc, "/msg/appmsg/url")
-	if urlNode != nil {
-		url = urlNode.InnerText()
-	}
-	var des string
-	desNode := xmlquery.FindOne(doc, "/msg/appmsg/des")
-	if desNode != nil {
-		des = desNode.InnerText()
-	}
 
-	return &LinkData{
-		Title:       titleNode.InnerText(),
-		Description: des,
-		URL:         url,
+	return &common.AppData{
+		Title:       "",
+		Description: node.SelectAttr("nickname"),
+		Source:      node.SelectAttr("nickname"),
+		URL:         node.SelectAttr("bigheadimgurl"),
 	}
 }
 
-func parseRevoke(as *AppService, msg *WechatMessage) string {
+func parseApp(s *Service, msg *WechatMessage, appType int) *common.AppData {
+	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
+	if err != nil {
+		return nil
+	}
+
+	switch appType {
+	case 1:
+		titleNode := xmlquery.FindOne(doc, "/msg/appmsg/title")
+		if titleNode == nil || len(titleNode.InnerText()) == 0 {
+			return nil
+		}
+		return &common.AppData{
+			Title:       "",
+			Description: titleNode.InnerText(),
+			Source:      "",
+			URL:         "",
+		}
+	case 19: // forward
+		titleNode := xmlquery.FindOne(doc, "/msg/appmsg/title")
+		if titleNode == nil || len(titleNode.InnerText()) == 0 {
+			return nil
+		}
+		var des string
+		desNode := xmlquery.FindOne(doc, "/msg/appmsg/des")
+		if desNode != nil {
+			des = desNode.InnerText()
+		}
+		return &common.AppData{
+			Title:       titleNode.InnerText(),
+			Description: des,
+			Source:      "",
+			URL:         "",
+		}
+	case 51: // video
+		titleNode := xmlquery.FindOne(doc, "/msg/appmsg/finderFeed/nickname")
+		if titleNode == nil || len(titleNode.InnerText()) == 0 {
+			return nil
+		}
+		var des string
+		desNode := xmlquery.FindOne(doc, "/msg/appmsg/finderFeed/desc")
+		if desNode != nil {
+			des = desNode.InnerText()
+		}
+		var url string
+		urlNode := xmlquery.FindOne(doc, "/msg/appmsg/finderFeed//fullCoverUrl")
+		if urlNode != nil {
+			url = urlNode.InnerText()
+		}
+		return &common.AppData{
+			Title:       titleNode.InnerText(),
+			Description: des,
+			Source:      titleNode.InnerText(),
+			URL:         url,
+		}
+	case 63: // live
+		titleNode := xmlquery.FindOne(doc, "/msg/appmsg/finderLive/nickname")
+		if titleNode == nil || len(titleNode.InnerText()) == 0 {
+			return nil
+		}
+		var des string
+		desNode := xmlquery.FindOne(doc, "/msg/appmsg/finderLive/desc")
+		if desNode != nil {
+			des = desNode.InnerText()
+		}
+		var url string
+		urlNode := xmlquery.FindOne(doc, "/msg/appmsg/finderLive//coverUrl")
+		if urlNode != nil {
+			url = urlNode.InnerText()
+		}
+		return &common.AppData{
+			Title:       titleNode.InnerText(),
+			Description: des,
+			Source:      titleNode.InnerText(),
+			URL:         url,
+		}
+	default:
+		titleNode := xmlquery.FindOne(doc, "/msg/appmsg/title")
+		if titleNode == nil || len(titleNode.InnerText()) == 0 {
+			return nil
+		}
+		var url string
+		urlNode := xmlquery.FindOne(doc, "/msg/appmsg/url")
+		if urlNode != nil {
+			url = urlNode.InnerText()
+		}
+		var des string
+		desNode := xmlquery.FindOne(doc, "/msg/appmsg/des")
+		if desNode != nil {
+			des = desNode.InnerText()
+		}
+		var source string
+		if sourceNode := xmlquery.FindOne(doc, "/msg/appmsg/sourcedisplayname"); sourceNode != nil {
+			source = sourceNode.InnerText()
+		} else if sourceNode := xmlquery.FindOne(doc, "/msg/appinfo/appname"); sourceNode != nil {
+			source = sourceNode.InnerText()
+		}
+		return &common.AppData{
+			Title:       titleNode.InnerText(),
+			Description: des,
+			Source:      source,
+			URL:         url,
+		}
+	}
+}
+
+func parseRevoke(s *Service, msg *WechatMessage) string {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return ""
@@ -337,7 +469,7 @@ func parseRevoke(as *AppService, msg *WechatMessage) string {
 	return revokeNode.InnerText()
 }
 
-func parsePrivateVoIP(as *AppService, msg *WechatMessage) string {
+func parsePrivateVoIP(s *Service, msg *WechatMessage) string {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return ""
@@ -368,7 +500,7 @@ func parsePrivateVoIP(as *AppService, msg *WechatMessage) string {
 	return ""
 }
 
-func parseSystemMessage(as *AppService, msg *WechatMessage) string {
+func parseSystemMessage(s *Service, msg *WechatMessage) string {
 	doc, err := xmlquery.Parse(strings.NewReader(msg.Message))
 	if err != nil {
 		return ""
@@ -393,16 +525,16 @@ func parseSystemMessage(as *AppService, msg *WechatMessage) string {
 	return ""
 }
 
-func downloadFile(as *AppService, msg *WechatMessage) *BlobData {
-	ctx, cancel := context.WithTimeout(context.Background(), MediaDownloadTiemout)
+func downloadFile(s *Service, msg *WechatMessage) *common.BlobData {
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.Wechat.RequestTimeout)
 	defer cancel()
 
-	file := filepath.Join(as.Docdir, msg.FilePath)
+	file := filepath.Join(s.docdir, msg.FilePath)
 	for {
-		if PathExists(file) {
+		if pathExists(file) {
 			data, err := os.ReadFile(file)
 			if err == nil && data != nil {
-				return &BlobData{
+				return &common.BlobData{
 					Name:   filepath.Base(file),
 					Binary: data,
 				}
@@ -417,17 +549,20 @@ func downloadFile(as *AppService, msg *WechatMessage) *BlobData {
 	}
 }
 
-func saveBlob(as *AppService, msg *MatrixMessage) string {
-	var data BlobData
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		return ""
+func saveBlob(workdir string, msg *common.Event) string {
+	var data *common.BlobData
+	if msg.Type == common.EventPhoto {
+		// TODO:
+		data = msg.Data.([]*common.BlobData)[0]
+	} else {
+		data = msg.Data.(*common.BlobData)
 	}
 
 	var path string
 	if len(data.Name) > 0 {
-		path = filepath.Join(as.Workdir, data.Name)
+		path = filepath.Join(workdir, data.Name)
 	} else {
-		path = filepath.Join(as.Workdir, fmt.Sprintf("%x", md5.Sum(data.Binary)))
+		path = filepath.Join(workdir, fmt.Sprintf("%x", md5.Sum(data.Binary)))
 	}
 
 	if err := os.WriteFile(path, data.Binary, 0o644); err != nil {
@@ -437,25 +572,25 @@ func saveBlob(as *AppService, msg *MatrixMessage) string {
 	return path
 }
 
-func PathExists(path string) bool {
+func pathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || errors.Is(err, os.ErrExist)
 }
 
-func GetDocDir() string {
+func getDocDir() string {
 	u, _ := user.Current()
 	baseDir := filepath.Join(u.HomeDir, "Documents")
 
 	// Old windows path
-	if !PathExists(baseDir) {
+	if !pathExists(baseDir) {
 		baseDir = filepath.Join(u.HomeDir, "My Documents")
 	}
 
 	return baseDir
 }
 
-func GetWechatDocdir() string {
-	baseDir := GetDocDir()
+func getWechatDocdir() string {
+	baseDir := getDocDir()
 
 	regKey, err := registry.OpenKey(registry.CURRENT_USER, "SOFTWARE\\Tencent\\WeChat", registry.QUERY_VALUE)
 	if err == nil {

@@ -1,7 +1,8 @@
-package internal
+package wechat
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,15 +40,17 @@ const (
 
 	DB_MICRO_MSG      = "MicroMsg.db"
 	DB_OPENIM_CONTACT = "OpenIMContact.db"
+	DB_MEDIA_MSG      = "MediaMSG0.db"
 )
 
-type WechatClient struct {
-	port int32
-	pid  uintptr
-	proc *process.Process
+type Client struct {
+	listen int32
+	port   int32
+	pid    uintptr
+	proc   *process.Process
 }
 
-func (c *WechatClient) IsAlive() bool {
+func (c *Client) IsAlive() bool {
 	status, err := c.proc.IsRunning()
 	if err != nil {
 		return false
@@ -55,7 +58,7 @@ func (c *WechatClient) IsAlive() bool {
 	return status
 }
 
-func (c *WechatClient) Dispose() error {
+func (c *Client) Dispose() error {
 	if c.proc == nil {
 		return nil
 	}
@@ -84,7 +87,7 @@ func (c *WechatClient) Dispose() error {
 	return nil
 }
 
-func (c *WechatClient) HookMsg(savePath string) error {
+func (c *Client) HookMsg(savePath string) error {
 	path, err := json.Marshal(map[string]string{
 		"save_path": savePath,
 	})
@@ -94,7 +97,7 @@ func (c *WechatClient) HookMsg(savePath string) error {
 
 	_, err = post(
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_HOOK),
-		[]byte(fmt.Sprintf(`{"port":%d}`, listenPort)),
+		[]byte(fmt.Sprintf(`{"port":%d}`, c.listen)),
 	)
 	if err != nil {
 		return err
@@ -117,7 +120,7 @@ func (c *WechatClient) HookMsg(savePath string) error {
 	return nil
 }
 
-func (c *WechatClient) SetVersion(version string) error {
+func (c *Client) SetVersion(version string) error {
 	data, err := json.Marshal(map[string]string{
 		"version": version,
 	})
@@ -133,7 +136,7 @@ func (c *WechatClient) SetVersion(version string) error {
 	return err
 }
 
-func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
+func (c *Client) LoginWtihQRCode() ([]byte, error) {
 	// FIXME: skip the first qr code
 	time.Sleep(3 * time.Second)
 
@@ -145,7 +148,7 @@ func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
 		return nil, err
 	}
 
-	var resp GetQRCodeResp
+	var resp WxGetQRCodeResp
 	err = json.Unmarshal(ret, &resp)
 	if err != nil {
 		return ret, nil
@@ -154,7 +157,7 @@ func (c *WechatClient) LoginWtihQRCode() ([]byte, error) {
 	}
 }
 
-func (c *WechatClient) Logout() error {
+func (c *Client) Logout() error {
 	_, err := post(
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_LOGOUT),
 		[]byte("{}"),
@@ -163,7 +166,7 @@ func (c *WechatClient) Logout() error {
 	return err
 }
 
-func (c *WechatClient) IsLogin() bool {
+func (c *Client) IsLogin() bool {
 	ret, err := post(
 		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_IS_LOGIN),
 		[]byte("{}"),
@@ -172,7 +175,7 @@ func (c *WechatClient) IsLogin() bool {
 		return false
 	}
 
-	var resp IsLoginResp
+	var resp WxIsLoginResp
 	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse is_login response", err)
@@ -182,7 +185,7 @@ func (c *WechatClient) IsLogin() bool {
 	return resp.IsLogin == 1
 }
 
-func (c *WechatClient) GetSelf() (*UserInfo, error) {
+func (c *Client) GetSelf() (*WxUserInfo, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -195,7 +198,7 @@ func (c *WechatClient) GetSelf() (*UserInfo, error) {
 		return nil, err
 	}
 
-	var resp GetSelfResp
+	var resp WxGetSelfResp
 	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_self response", err)
@@ -205,7 +208,7 @@ func (c *WechatClient) GetSelf() (*UserInfo, error) {
 	return &resp.Data, nil
 }
 
-func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
+func (c *Client) GetUserInfo(wxid string) (*WxUserInfo, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -260,7 +263,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 		return nil, fmt.Errorf("user %s not found", wxid)
 	}
 
-	info := &UserInfo{
+	info := &WxUserInfo{
 		ID:        gjson.GetBytes(ret, "data.1.0").String(),
 		Nickname:  gjson.GetBytes(ret, "data.1.1").String(),
 		BigAvatar: gjson.GetBytes(ret, "data.1.2").String(),
@@ -273,7 +276,7 @@ func (c *WechatClient) GetUserInfo(wxid string) (*UserInfo, error) {
 	return info, nil
 }
 
-func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
+func (c *Client) GetGroupInfo(wxid string) (*WxGroupInfo, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -311,7 +314,7 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 		return nil, fmt.Errorf("group %s not found", wxid)
 	}
 
-	info := &GroupInfo{
+	info := &WxGroupInfo{
 		ID:        gjson.GetBytes(ret, "data.1.0").String(),
 		Name:      gjson.GetBytes(ret, "data.1.1").String(),
 		BigAvatar: gjson.GetBytes(ret, "data.1.2").String(),
@@ -337,15 +340,14 @@ func (c *WechatClient) GetGroupInfo(wxid string) (*GroupInfo, error) {
 		return nil, err
 	}
 
-	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
-		return nil, fmt.Errorf("group %s not found", wxid)
+	if gjson.GetBytes(ret, "data.#").Int() > 1 {
+		info.Notice = gjson.GetBytes(ret, "data.1.0").String()
 	}
-	info.Notice = gjson.GetBytes(ret, "data.1.0").String()
 
 	return info, nil
 }
 
-func (c *WechatClient) GetGroupMembers(wxid string) ([]string, error) {
+func (c *Client) GetGroupMembers(wxid string) ([]string, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -358,7 +360,7 @@ func (c *WechatClient) GetGroupMembers(wxid string) ([]string, error) {
 		return nil, err
 	}
 
-	var resp GetGroupMembersResp
+	var resp WxGetGroupMembersResp
 	err = json.Unmarshal(ret, &resp)
 	if err != nil || resp.Result != "OK" {
 		log.Warnln("Failed to parse get_group_members response", err)
@@ -368,7 +370,7 @@ func (c *WechatClient) GetGroupMembers(wxid string) ([]string, error) {
 	return strings.Split(resp.Members, "^G"), nil
 }
 
-func (c *WechatClient) GetGroupMemberNickname(group, wxid string) (string, error) {
+func (c *Client) GetGroupMemberNickname(group, wxid string) (string, error) {
 	if !c.IsLogin() {
 		return "", fmt.Errorf("user not logged")
 	}
@@ -384,7 +386,7 @@ func (c *WechatClient) GetGroupMemberNickname(group, wxid string) (string, error
 	return gjson.GetBytes(ret, "nickname").String(), nil
 }
 
-func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
+func (c *Client) GetFriendList() ([]*WxUserInfo, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -394,10 +396,10 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 		return nil, err
 	}
 
-	var friends []*UserInfo
+	var friends []*WxUserInfo
 	for _, c := range contacts {
 		if !strings.HasSuffix(c[0], "@chatroom") {
-			info := &UserInfo{
+			info := &WxUserInfo{
 				ID:        c[0],
 				Nickname:  c[1],
 				BigAvatar: c[2],
@@ -415,7 +417,7 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 	if err == nil {
 		for _, c := range openIMContacts {
 			if !strings.HasSuffix(c[0], "@chatroom") {
-				info := &UserInfo{
+				info := &WxUserInfo{
 					ID:        c[0],
 					Nickname:  c[1],
 					BigAvatar: c[2],
@@ -433,7 +435,7 @@ func (c *WechatClient) GetFriendList() ([]*UserInfo, error) {
 	return friends, nil
 }
 
-func (c *WechatClient) GetGroupList() ([]*GroupInfo, error) {
+func (c *Client) GetGroupList() ([]*WxGroupInfo, error) {
 	if !c.IsLogin() {
 		return nil, fmt.Errorf("user not logged")
 	}
@@ -443,10 +445,10 @@ func (c *WechatClient) GetGroupList() ([]*GroupInfo, error) {
 		return nil, err
 	}
 
-	var groups []*GroupInfo
+	var groups []*WxGroupInfo
 	for _, c := range contacts {
 		if strings.HasSuffix(c[0], "@chatroom") {
-			info := &GroupInfo{
+			info := &WxGroupInfo{
 				ID:        c[0],
 				Name:      c[1],
 				BigAvatar: c[2],
@@ -462,7 +464,44 @@ func (c *WechatClient) GetGroupList() ([]*GroupInfo, error) {
 	return groups, nil
 }
 
-func (c *WechatClient) SendText(target string, content string) error {
+func (c *Client) GetVoice(msgID uint64) ([]byte, error) {
+	if !c.IsLogin() {
+		return nil, fmt.Errorf("user not logged")
+	}
+
+	var sql string
+
+	handle, err := c.getDbHandleByName(DB_MEDIA_MSG)
+	if err != nil {
+		return nil, err
+	}
+
+	sql = fmt.Sprintf(`SELECT Buf FROM Media WHERE Reserved0 = %d`, msgID)
+
+	jsonSql, err := json.Marshal(map[string]interface{}{
+		"db_handle": handle,
+		"sql":       sql,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := post(
+		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_DATABASE_QUERY),
+		jsonSql,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if gjson.GetBytes(ret, "data.#").Int() <= 1 {
+		return nil, nil
+	}
+
+	return base64.StdEncoding.DecodeString(gjson.GetBytes(ret, "data.1.0").String())
+}
+
+func (c *Client) SendText(target string, content string) error {
 	data, err := json.Marshal(map[string]string{
 		"wxid": target,
 		"msg":  content,
@@ -479,7 +518,7 @@ func (c *WechatClient) SendText(target string, content string) error {
 	return err
 }
 
-func (c *WechatClient) SendAtText(target string, content string, mentions []string) error {
+func (c *Client) SendAtText(target string, content string, mentions []string) error {
 	wxids := strings.Join(mentions, ",")
 	data, err := json.Marshal(map[string]interface{}{
 		"chatroom_id":   target,
@@ -500,7 +539,7 @@ func (c *WechatClient) SendAtText(target string, content string, mentions []stri
 	return err
 }
 
-func (c *WechatClient) SendImage(target string, path string) error {
+func (c *Client) SendImage(target string, path string) error {
 	data, err := json.Marshal(map[string]string{
 		"receiver": target,
 		"img_path": path,
@@ -517,7 +556,7 @@ func (c *WechatClient) SendImage(target string, path string) error {
 	return err
 }
 
-func (c *WechatClient) SendFile(target string, path string) error {
+func (c *Client) SendFile(target string, path string) error {
 	data, err := json.Marshal(map[string]string{
 		"receiver":  target,
 		"file_path": path,
@@ -534,7 +573,7 @@ func (c *WechatClient) SendFile(target string, path string) error {
 	return err
 }
 
-func (c *WechatClient) ForwardMessage(target string, msgid uint64) error {
+func (c *Client) ForwardMessage(target string, msgid uint64) error {
 	data, err := json.Marshal(map[string]interface{}{
 		"wxid":  target,
 		"msgid": msgid,
@@ -551,16 +590,16 @@ func (c *WechatClient) ForwardMessage(target string, msgid uint64) error {
 	return err
 }
 
-func (c *WechatClient) GetOpenIMContacts() ([][5]string, error) {
+func (c *Client) GetOpenIMContacts() ([][5]string, error) {
 	handle, err := c.getDbHandleByName(DB_OPENIM_CONTACT)
 	if err != nil {
 		return nil, err
 	}
 
-	sql := fmt.Sprintf(`
+	sql := `
 		SELECT UserName, NickName, BigHeadImgUrl, SmallHeadImgUrl, Remark
 		FROM OpenIMContact
-	`)
+	`
 
 	jsonSql, err := json.Marshal(map[string]interface{}{
 		"db_handle": handle,
@@ -582,7 +621,7 @@ func (c *WechatClient) GetOpenIMContacts() ([][5]string, error) {
 		return [][5]string{}, nil
 	}
 
-	var result ContactResp
+	var result WxContactResp
 	err = json.Unmarshal(ret, &result)
 	if err != nil || result.Result != "OK" {
 		log.Warnln("Failed to parse get contacts response", err)
@@ -592,18 +631,18 @@ func (c *WechatClient) GetOpenIMContacts() ([][5]string, error) {
 	return result.Data[1:], nil
 }
 
-func (c *WechatClient) GetContacts() ([][5]string, error) {
+func (c *Client) GetContacts() ([][5]string, error) {
 	handle, err := c.getDbHandleByName(DB_MICRO_MSG)
 	if err != nil {
 		return nil, err
 	}
 
-	sql := fmt.Sprintf(`
+	sql := `
 		SELECT c.UserName, c.NickName, i.bigHeadImgUrl, i.smallHeadImgUrl, c.Remark
 		FROM Contact AS c
 		LEFT JOIN ContactHeadImgUrl AS i
 			ON c.UserName = i.usrName
-	`)
+	`
 
 	jsonSql, err := json.Marshal(map[string]interface{}{
 		"db_handle": handle,
@@ -625,7 +664,7 @@ func (c *WechatClient) GetContacts() ([][5]string, error) {
 		return [][5]string{}, nil
 	}
 
-	var result ContactResp
+	var result WxContactResp
 	err = json.Unmarshal(ret, &result)
 	if err != nil || result.Result != "OK" {
 		log.Warnln("Failed to parse get contacts response", err)
@@ -635,7 +674,7 @@ func (c *WechatClient) GetContacts() ([][5]string, error) {
 	return result.Data[1:], nil
 }
 
-func (c *WechatClient) getDbHandleByName(name string) (int64, error) {
+func (c *Client) getDbHandleByName(name string) (int64, error) {
 	if !c.IsLogin() {
 		return 0, fmt.Errorf("user not logged")
 	}
