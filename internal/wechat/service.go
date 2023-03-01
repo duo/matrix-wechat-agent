@@ -244,8 +244,8 @@ func (s *Service) processWechatMessage(mxid string, msg *WechatMessage) {
 	case 47: // Sticker
 		blob := downloadSticker(s, msg)
 		if blob != nil {
-			event.Type = common.EventPhoto
-			event.Data = []*common.BlobData{blob}
+			event.Type = common.EventSticker
+			event.Data = blob
 		} else {
 			event.Content = "[表情下载失败]"
 		}
@@ -288,8 +288,8 @@ func (s *Service) processWechatMessage(mxid string, msg *WechatMessage) {
 			}
 			blob := downloadSticker(s, msg)
 			if blob != nil {
-				event.Type = common.EventPhoto
-				event.Data = []*common.BlobData{blob}
+				event.Type = common.EventSticker
+				event.Data = blob
 			} else {
 				event.Content = "[表情下载失败]"
 			}

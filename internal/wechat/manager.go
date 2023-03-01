@@ -222,7 +222,7 @@ func (m *Manager) SendMessage(mxid string, event *common.Event) (*common.Event, 
 		} else {
 			err = client.SendText(target, event.Content)
 		}
-	case common.EventPhoto, common.EventVideo:
+	case common.EventPhoto, common.EventSticker, common.EventVideo:
 		path := saveBlob(m.config.Wechat.Workdir, event)
 		if len(path) > 0 {
 			err = client.SendImage(target, path)
