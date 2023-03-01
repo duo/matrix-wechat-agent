@@ -4,8 +4,11 @@
 
 vendor/
 
+log/
 temp/
 matrix-wechat-agent.exe
 SWeChatRobot.dll
 wxDriver.dll
 wxDriver64.dll
+
+configure.yaml
