@@ -10,6 +10,7 @@ GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go
 ### Dependencies
 * SWeChatRobot.dll, wxDriver.dll, wxDriver64.dll (https://github.com/ljc545w/ComWeChatRobot)
 * Visual C++ Redistributable (https://docs.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+* WeChat 3.7.0.30 (Unofficial: https://github.com/tom-snow/wechat-windows-versions/releases/tag/v3.7.0.30)
 
 ## Configuration
 * configure.yaml
