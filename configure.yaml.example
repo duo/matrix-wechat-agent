@@ -1,5 +1,5 @@
 wechat:
-  version: 3.8.1.26 # Required, fake WeChat version
+  version: 3.8.1.26 # Required, disguised WeChat version
   listen_port: 22222 # Required, port for listening WeChat message
   init_timeout: 10s # Optional, WeChat client initialization timeout
   request_timeout: 30s # Optional

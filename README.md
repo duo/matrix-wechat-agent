@@ -11,14 +11,20 @@ GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go
 * SWeChatRobot.dll, wxDriver.dll, wxDriver64.dll (https://github.com/ljc545w/ComWeChatRobot)
 * Visual C++ Redistributable (https://docs.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 
-### Launch
-```sh
-matrix-wechat-agent.exe -h wss://example.com:port -s foobar
-```
+## Configuration
+* configure.yaml
+```yaml
+limb:
+  version: 3.8.1.26 # Required, disguised WeChat version
+  listen_port: 22222 # Required, port for listening WeChat message
+  init_timeout: 10s # Optional, WeChat client initialization timeout
+  request_timeout: 30s # Optional
 
-### Parameters
-| Parameter | Function            |
-| :-------: | ------------------- |
-|   `-h`    | appservice address  |
-|   `-s`    | secret              |
-|   `-V`    | wechat fake version |
+service:
+  addr: ws://10.10.10.10:11111 # Required, ocotpus address
+  secret: hello # Reuqired, user defined secret
+  ping_interval: 30s # Optional
+
+log:
+  level: info
+```

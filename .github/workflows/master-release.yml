@@ -15,7 +15,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: "1.19.2"
+          go-version: "1.20.1"
 
       - name: Build windows i386
         run: GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go
@@ -31,4 +31,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
+          prerelease: true
           files: matrix-wechat-agent.exe
