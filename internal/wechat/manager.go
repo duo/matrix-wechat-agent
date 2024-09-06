@@ -8,23 +8,20 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
-	"syscall"
 	"time"
+	"os/exec"
 
 	"github.com/duo/matrix-wechat-agent/internal/common"
 
 	"github.com/shirou/gopsutil/v3/process"
+
+	"go.zoe.im/injgo"
 
 	log "github.com/sirupsen/logrus"
 )
 
 type Manager struct {
 	config *common.Configure
-
-	funcNewWechat   uintptr
-	funcStartListen uintptr
-	funcStopListen  uintptr
 
 	portSeq int32
 
@@ -37,27 +34,8 @@ type Manager struct {
 }
 
 func NewManager(config *common.Configure, f func(string, *WechatMessage)) *Manager {
-	driver := LoadDriver()
-	defer syscall.FreeLibrary(driver)
-
-	newWechat, err := syscall.GetProcAddress(driver, "new_wechat")
-	if err != nil {
-		log.Fatal(err)
-	}
-	startListen, err := syscall.GetProcAddress(driver, "start_listen")
-	if err != nil {
-		log.Fatal(err)
-	}
-	stopListen, err := syscall.GetProcAddress(driver, "stop_listen")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	return &Manager{
 		config:          config,
-		funcNewWechat:   newWechat,
-		funcStartListen: startListen,
-		funcStopListen:  stopListen,
 		portSeq:         config.Wechat.ListenPort,
 		pids:            make(map[int]string),
 		clients:         make(map[string]*Client),
@@ -67,6 +45,7 @@ func NewManager(config *common.Configure, f func(string, *WechatMessage)) *Manag
 }
 
 func (m *Manager) Connect(mxid string, path string) error {
+	log.Debugln("Create WeChat for mxid: ", mxid)
 	m.clientsLock.Lock()
 	defer m.clientsLock.Unlock()
 
@@ -75,46 +54,62 @@ func (m *Manager) Connect(mxid string, path string) error {
 		return nil
 	}
 
+	// TODO: write port to config file similar to this
+	// https://github.com/cocktail18/wxhelper-go/blob/2d6c13f455f8333d35d1410e261284f944483ea3/injector/injector.go#L20
+	// client = &Client{
+	// 	listen: m.config.Wechat.ListenPort,
+	// 	port:   atomic.AddInt32(&m.portSeq, 1),
+	// }
 	client = &Client{
-		listen: m.config.Wechat.ListenPort,
-		port:   atomic.AddInt32(&m.portSeq, 1),
+		listen: 19088,
+		port:   19088,
 	}
-	pid, _, errno := syscall.SyscallN(m.funcNewWechat)
-	if pid == 0 {
-		return errno
-	}
-	if int(errno) != 0 {
-		log.Infoln(errno)
-	}
-	client.pid = pid
 
-	p, err := process.NewProcess(int32(pid))
+
+	// Start WeChat process
+	log.Debugln("Starting WeChat process at ", m.config.Wechat.Path)
+	wechat := exec.Command(m.config.Wechat.Path)
+	errWechat := wechat.Start()
+	if errWechat != nil {
+		return fmt.Errorf("Failed to start wechat: %w", m.config.Wechat.Path, errWechat)
+	}
+	client.pid = wechat.Process.Pid
+	p, err := process.NewProcess(int32(client.pid))
 	if err != nil {
-		return fmt.Errorf("wechat process not exists: %w", err)
+		return fmt.Errorf("Wechat process does not exist: %w", err)
 	}
 	client.proc = p
 
-	_, _, errno = syscall.SyscallN(m.funcStartListen, pid, uintptr(client.port))
-	if int(errno) != 0 {
+	// Wait for WeChat process to start
+	<-time.After(1 * time.Second)
+
+	// Attach to WeChat process
+	log.Debugln("Injecting WeChat helper from ", m.config.Wechat.WxHelperPath)
+	errWxHelper := injgo.Inject(client.pid, m.config.Wechat.WxHelperPath, true)
+	if errWxHelper != nil {
 		client.Dispose()
-		return errno
+		return fmt.Errorf("failed to inject wxhelper: %w", m.config.Wechat.WxHelperPath, errWxHelper)
 	}
 
-	m.pids[int(pid)] = mxid
+	m.pids[client.pid] = mxid
 	m.clients[mxid] = client
 
 	ctx, cancel := context.WithTimeout(context.Background(), m.config.Wechat.InitTimeout)
 	defer cancel()
 
 	for {
+		log.Debugln("Initiate WeChat helper")
 		err = client.HookMsg(path)
 		if err == nil {
+			log.Infoln("Hooked wechat message")
 			if err := client.SetVersion(m.config.Wechat.Version); err != nil {
 				log.Warnln("Failed to set version", err)
 			} else {
 				log.Infoln("Set wechat version to", m.config.Wechat.Version)
 			}
 			return nil
+		} else {
+			log.Debugln("Failed to connect to Wechat helper", err)
 		}
 
 		select {
@@ -125,7 +120,7 @@ func (m *Manager) Connect(mxid string, path string) error {
 	}
 }
 
-func (m *Manager) Disconnet(mxid string) (err error) {
+func (m *Manager) Disconnect(mxid string) (err error) {
 	m.clientsLock.Lock()
 	defer m.clientsLock.Unlock()
 
@@ -137,9 +132,9 @@ func (m *Manager) Disconnet(mxid string) (err error) {
 	return
 }
 
-func (m *Manager) LoginWtihQRCode(mxid string) (any, error) {
+func (m *Manager) LoginWithQRCode(mxid string) (any, error) {
 	return m.call(mxid, func(c *Client, v ...any) (any, error) {
-		return c.LoginWtihQRCode()
+		return c.LoginWithQRCode()
 	})
 }
 

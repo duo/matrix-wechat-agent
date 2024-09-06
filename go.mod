@@ -9,6 +9,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/tinylru v1.1.0
+	go.zoe.im/injgo v0.0.2
 	golang.org/x/sys v0.5.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -28,3 +29,6 @@ require (
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 )
+
+// For win64 support
+replace go.zoe.im/injgo v0.0.2 => github.com/cocktail18/injgo v0.0.0-20230928060739-58f0ef540463

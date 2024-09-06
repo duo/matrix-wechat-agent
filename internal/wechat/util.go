@@ -7,15 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/duo/matrix-wechat-agent/internal/common"
@@ -36,22 +33,6 @@ var (
 
 	UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66"
 )
-
-func LoadDriver() syscall.Handle {
-	var driverDLL string
-	if runtime.GOARCH == "amd64" {
-		driverDLL = "wxDriver64.dll"
-	} else {
-		driverDLL = "wxDriver.dll"
-	}
-
-	driver, err := syscall.LoadLibrary(driverDLL)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return driver
-}
 
 func getMentions(s *Service, msg *WechatMessage) []string {
 	if len(msg.ExtraInfo) == 0 {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"encoding/json"
 
 	"github.com/duo/matrix-wechat-agent/internal/common"
 	"github.com/duo/matrix-wechat-agent/internal/wechat"
@@ -23,9 +24,9 @@ func main() {
 		log.SetLevel(logLevel)
 	}
 	log.SetFormatter(&log.TextFormatter{TimestampFormat: "2006-01-02 15:04:05", FullTimestamp: true})
-
-	driver := wechat.LoadDriver()
-	defer syscall.FreeLibrary(driver)
+	
+	configBytes, _ := json.MarshalIndent(config, "", "  ")
+	log.Debug("Starting agent with config: ", string(configBytes))
 
 	service := wechat.NewService(config)
 	go service.Start()
