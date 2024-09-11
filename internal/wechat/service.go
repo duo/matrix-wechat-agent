@@ -29,12 +29,14 @@ type Service struct {
 	history tinylru.LRU
 }
 
-func (s *Service) Start() {
-	if err := s.bridge.Connect(); err != nil {
+func (service *Service) Start() {
+	log.Debug("Connect to bridge at ", service.config.Service.Addr)
+	if err := service.bridge.Connect(); err != nil {
 		log.Fatal(err)
 	}
 
-	go s.manager.Serve()
+	log.Debug("Start wechat manager")
+	go service.manager.Serve()
 }
 
 func (s *Service) Stop() {
@@ -131,10 +133,10 @@ func (s *Service) actuallyHandleRequest(mxid string, req *common.Request) *commo
 		err := s.manager.Connect(mxid, s.workdir)
 		return genResponse(common.RespConnect, nil, err)
 	case common.ReqDisconnect:
-		err := s.manager.Disconnet(mxid)
+		err := s.manager.Disconnect(mxid)
 		return genResponse(common.RespDisconnect, nil, err)
 	case common.ReqLoginQR:
-		ret, err := s.manager.LoginWtihQRCode(mxid)
+		ret, err := s.manager.LoginWithQRCode(mxid)
 		return genResponse(common.RespLoginQR, ret, err)
 	case common.ReqIsLogin:
 		ret, err := s.manager.IsLogin(mxid)
@@ -355,7 +357,7 @@ func (s *Service) processWechatMessage(mxid string, msg *WechatMessage) {
 	s.pushEvent(mxid, event)
 }
 
-// push event ro bridge
+// push event to bridge
 func (s *Service) pushEvent(mxid string, event *common.Event) {
 	msg := &common.Message{
 		MXID: mxid,

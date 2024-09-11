@@ -20,6 +20,8 @@ type Configure struct {
 		InitTimeout    time.Duration `yaml:"init_timeout"`
 		RequestTimeout time.Duration `yaml:"request_timeout"`
 		Workdir        string        `yaml:"-"`
+		Path 		   string        `yaml:"path"`
+		WxHelperPath   string        `yaml:"wx_helper_path"`
 	} `yaml:"wechat"`
 
 	Service struct {

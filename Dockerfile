@@ -1,58 +1,102 @@
+# Inspiration from:
+#	https://github.com/li-xunhuan/wxhelper-docker
+# 	https://github.com/wuxs/wxbot-docker/blob/master/Dockerfile
+#	https://github.com/thinker007/wxhelper-docker
+#	https://github.com/duo/matrix-wechat-docker
+#	https://github.com/tom-snow/docker-ComWechat
+
 FROM golang:1.20-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
 WORKDIR /build
 
-COPY ./ .
+COPY ./internal ./internal
+COPY ./main.go .
+COPY ./go.mod .
+COPY ./go.sum .
 
 RUN set -ex && \
 	cd /build && \
-	GOOS=windows GOARCH=386 go build -o matrix-wechat-agent.exe main.go && \
-	wget -q "https://github.com/ljc545w/ComWeChatRobot/releases/download/3.7.0.30-0.1.1-pre/3.7.0.30-0.1.1-pre.zip" -O CowWeChatRobot.zip && \
-	unzip -q CowWeChatRobot.zip && \
-	git clone https://github.com/tom-snow/docker-ComWechat.git dc && \
-	wget -q "https://github.com/tom-snow/docker-ComWechat/releases/download/v0.2_wc3.7.0.30/Tencent.zip" -O dc/wine/Tencent.zip && \
-	echo 'build done'
+	GOOS=windows GOARCH=386 go build -v -o matrix-wechat-agent.exe main.go
 
-FROM zixia/wechat:3.3.0.115
+FROM zixia/wine:6.0
 
-ENV DISPLAY=:5 \
-	VNCPASS=YourSafeVNCPassword
+ARG WECHAT_VERSION=3.9.10.19
+ARG WXHELPER_VERSION=1
 
-USER user
-WORKDIR /home/user
+WORKDIR /home/user/.wine64/drive_c
 
-EXPOSE 5905
+USER root
+
+# Port for the HTTP server embedded in the WeChat app, expose for testing
+# EXPOSE 19088
 
 RUN set ex && \
-	sudo apt-get update && \
-	sudo apt-get --no-install-recommends install dumb-init tigervnc-standalone-server tigervnc-common openbox wget -y
+	apt-get update && \
+	apt-get --no-install-recommends install -y \
+		dumb-init \
+		xdotool \
+		x11-apps \
+		# Install net-tools for netstat (debugging)
+		net-tools \
+		# Install iproute2 for ss (debugging)
+		iproute2 \
+		# Install winbind for ntlm_auth (wechat)
+		winbind \
+		# Install libldap for LDAP support (wechat)
+		libldap-2.5-0
 
-COPY --from=builder /build/dc/wine/simsun.ttc  /home/user/.wine/drive_c/windows/Fonts/simsun.ttc
-COPY --from=builder /build/dc/wine/微信.lnk /home/user/.wine/drive_c/users/Public/Desktop/微信.lnk
-COPY --from=builder /build/dc/wine/system.reg  /home/user/.wine/system.reg
-COPY --from=builder /build/dc/wine/user.reg  /home/user/.wine/user.reg
-COPY --from=builder /build/dc/wine/userdef.reg /home/user/.wine/userdef.reg
+# Download WeChat
+ADD https://github.com/tom-snow/wechat-windows-versions/releases/download/v${WECHAT_VERSION}/WeChatSetup-${WECHAT_VERSION}.exe WeChatSetup.exe
+RUN chown user:group WeChatSetup.exe && chmod a+x WeChatSetup.exe
 
-COPY --from=builder /build/dc/wine/Tencent.zip /Tencent.zip
-COPY --from=builder /build/scripts/run.py /usr/bin/run.py
+# Download wxhelper
+# https://github.com/ttttupup/wxhelper
+ADD https://github.com/ttttupup/wxhelper/releases/download/${WECHAT_VERSION}-v${WXHELPER_VERSION}/wxhelper.dll wxhelper.dll
+RUN chown user:group wxhelper.dll
+
+# Debug info
+RUN ls -lah
+
+# Install WeChat
+COPY install-wechat.sh install-wechat.sh
+RUN chmod a+x install-wechat.sh
+USER user
+RUN ./install-wechat.sh && rm -rf WeChatSetup.exe && rm -rf install-wechat.sh
+
+# Disable crash dialog and update prompt
+RUN before=$(stat -c '%Y' /home/user/.wine64/user.reg) \
+	&& wine64 reg add 'HKEY_CURRENT_USER\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 \
+	&& wine64 reg add 'HKEY_CURRENT_USER\Software\Tencent\WeChat' /v NeedUpdateType /t REG_DWORD /d 0 \
+	&& while [ $(stat -c '%Y' /home/user/.wine64/user.reg) = $before ]; do sleep 1; done
+
+# Add WeChat agent
 COPY --from=builder /build/matrix-wechat-agent.exe /home/user/matrix-wechat-agent/matrix-wechat-agent.exe
-COPY --from=builder /build/http/SWeChatRobot.dll /home/user/matrix-wechat-agent/SWeChatRobot.dll
-COPY --from=builder /build/http/wxDriver.dll /home/user/matrix-wechat-agent/wxDriver.dll
-
+COPY ./scripts/run.py /usr/bin/run.py
+USER root
 RUN set -ex && \
-	sudo chmod a+x /usr/bin/run.py && \
-	rm -rf "/home/user/.wine/drive_c/Program Files/Tencent/" && \
-	unzip -q /Tencent.zip && \
-	cp -rf wine/Tencent "/home/user/.wine/drive_c/Program Files/" && \
-	sudo rm -rf wine Tencent.zip && \
-	sudo apt-get autoremove -y && \
-	sudo apt-get clean && \
-	sudo rm -fr /tmp/* && \
-	echo 'build done'
+	chmod a+x /usr/bin/run.py && \
+	apt-get autoremove -y && \
+	apt-get clean && \
+	rm -fr /tmp/*
 
+# Workaround for WeChat crashing on startup
+# https://github.com/sandboxie-plus/Sandboxie/issues/2674#issuecomment-1425317945
+# https://github.com/vufa/deepin-wine-wechat-arch/issues/270
+ADD https://github.com/vufa/deepin-wine-wechat-arch/raw/action/mmmojo.dll mmmojo.dll
+ADD https://github.com/vufa/deepin-wine-wechat-arch/raw/action/mmmojo_64.dll mmmojo_64.dll
+RUN chown user:group mmmojo.dll	\
+	&& chown user:group mmmojo_64.dll \
+	&& cp mmmojo.dll /home/user/.wine64/drive_c/Program\ Files/Tencent/WeChat/\[3.9.10.19\]/mmmojo.dll \
+	&& cp mmmojo_64.dll /home/user/.wine64/drive_c/Program\ Files/Tencent/WeChat/\[3.9.10.19\]/mmmojo_64.dll
+
+# Add injector (for manual testing)
+#ADD https://github.com/ttttupup/wxhelper/blob/main/tool/injector/ConsoleApplication.exe ConsoleApplication.exe
+#RUN chown user:group ConsoleApplication.exe
+
+USER user
 WORKDIR /home/user/matrix-wechat-agent
 
-ENTRYPOINT ["/usr/bin/dumb-init"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/bin/run.py"]

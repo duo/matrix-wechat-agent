@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	CLIENT_API_URL = "http://127.0.0.1:%d/api/?type=%d"
+	CLIENT_API_URL = "http://127.0.0.1:%d/api/%s"
 
 	WECHAT_IS_LOGIN                     = 0
 	WECHAT_GET_SELF_INFO                = 1
@@ -25,7 +25,7 @@ const (
 	WECHAT_MSG_SEND_AT                  = 3
 	WECHAT_MSG_SEND_IMAGE               = 5
 	WECHAT_MSG_SEND_FILE                = 6
-	WECHAT_MSG_START_HOOK               = 9
+	WECHAT_MSG_START_HOOK               = "hookSyncMsg"
 	WECHAT_MSG_START_IMAGE_HOOK         = 11
 	WECHAT_MSG_START_VOICE_HOOK         = 13
 	WECHAT_CONTACT_GET_LIST             = 15
@@ -46,7 +46,7 @@ const (
 type Client struct {
 	listen int32
 	port   int32
-	pid    uintptr
+	pid    int
 	proc   *process.Process
 }
 
@@ -88,34 +88,40 @@ func (c *Client) Dispose() error {
 }
 
 func (c *Client) HookMsg(savePath string) error {
-	path, err := json.Marshal(map[string]string{
+	_, err := json.Marshal(map[string]string{
 		"save_path": savePath,
 	})
 	if err != nil {
 		return err
 	}
 
-	_, err = post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_HOOK),
-		[]byte(fmt.Sprintf(`{"port":%d}`, c.listen)),
-	)
+	ret, err := c.callApi("checkLogin", []byte("{}"))
+	log.Debugln("checkLogin response: ", gjson.ParseBytes(ret).String(), err)
+
+	// TODO: Send params correctly
+	// similar to https://github.com/barryblueice/Vanilla-Client/blob/main/initialization/hook.py
+	// ret, err = c.callApi(WECHAT_MSG_START_HOOK, []byte("{}"))
+	// log.Debugln("HookMsg response: ", gjson.ParseBytes(ret).String(), err)
+
 	if err != nil {
 		return err
 	}
-	_, err = post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_IMAGE_HOOK),
-		path,
-	)
-	if err != nil {
-		return err
-	}
-	_, err = post(
-		fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_VOICE_HOOK),
-		path,
-	)
-	if err != nil {
-		return err
-	}
+
+	// TODO
+	// ret, err = post(
+	// 	fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_IMAGE_HOOK),
+	// 	path,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
+	// _, err = post(
+	// 	fmt.Sprintf(CLIENT_API_URL, c.port, WECHAT_MSG_START_VOICE_HOOK),
+	// 	path,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
@@ -136,7 +142,7 @@ func (c *Client) SetVersion(version string) error {
 	return err
 }
 
-func (c *Client) LoginWtihQRCode() ([]byte, error) {
+func (c *Client) LoginWithQRCode() ([]byte, error) {
 	// FIXME: skip the first qr code
 	time.Sleep(3 * time.Second)
 
@@ -711,4 +717,11 @@ func post(url string, data []byte) ([]byte, error) {
 	defer resp.Body.Close()
 
 	return io.ReadAll(resp.Body)
+}
+
+func (client *Client) callApi(name string, data []byte) ([]byte, error) {
+	return post(
+		fmt.Sprintf(CLIENT_API_URL, client.port, name),
+		data,
+	)
 }
